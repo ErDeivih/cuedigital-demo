@@ -216,8 +216,14 @@
 
     if (resto === "interfaz") return responder(DATOS.interfaz);
     if (resto === "cuenta/yo") return responder(DATOS.cuenta);
-    if (resto === "cuenta/entrar" || resto === "cuenta/registro")
-      return responder({ token: "demo" }, 201);
+    // **En la demo no hay alta de cuentas** (10/11/2026): es una copia fija con datos inventados y
+    // no hay backend detrás, así que lo honesto es decirlo en vez de fingir un alta.
+    if (resto === "cuenta/registro")
+      return responder(
+        { detail: "En esta demo no se pueden crear cuentas: es una copia fija con datos de ejemplo." },
+        403
+      );
+    if (resto === "cuenta/entrar") return responder({ token: "demo" }, 201);
     if (resto === "nuevo/hoy") {
       var hoy = clonar(DATOS.hoy);
       var lista = tierrasParaLaLista();
