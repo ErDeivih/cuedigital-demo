@@ -345,9 +345,55 @@
     document.body.insertBefore(aviso, document.body.firstChild);
   }
 
+  // ── Las imágenes que la app pide con src (no con fetch) ────────────────────────────────
+  //
+  // En GitHub Pages la demo vive en /<repositorio>/, así que una imagen con src="/api/..." se
+  // pide a la raíz del dominio (404) y el navegador pinta el icono de imagen rota **encima del
+  // contorno**. Aquí se cambian por un PNG transparente: la app dibuja el contorno con su SVG y
+  // no queda ningún icono roto.
+  var PNG_VACIO =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+  function arreglarImagenes() {
+    // Solo la ortofoto del mapa dibujado (/api/mapa/imagen). **La foto de la tierra NO se toca:**
+    // su fallo es lo que hace que la app dibuje el contorno con el SVG, y eso lo queremos.
+    var imgs = document.querySelectorAll('img[src^="/api/mapa/imagen"]');
+    for (var i = 0; i < imgs.length; i++) {
+      var img = imgs[i];
+      if (img.getAttribute("data-demo-vacia") === "1") continue;
+      img.setAttribute("data-demo-vacia", "1");
+      img.setAttribute("src", PNG_VACIO);
+    }
+    var enlaces = document.querySelectorAll('a[href^="/api/"]');
+    for (var j = 0; j < enlaces.length; j++) {
+      var enlace = enlaces[j];
+      if (enlace.getAttribute("data-demo-sin-descarga") === "1") continue;
+      enlace.setAttribute("data-demo-sin-descarga", "1");
+      enlace.addEventListener("click", function (evento) {
+        evento.preventDefault();
+      });
+    }
+  }
+
+  function vigilar() {
+    arreglarImagenes();
+    try {
+      new MutationObserver(arreglarImagenes).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["src", "href"],
+      });
+    } catch (error) {}
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", ponerElAviso);
+    document.addEventListener("DOMContentLoaded", function () {
+      ponerElAviso();
+      vigilar();
+    });
   } else {
     ponerElAviso();
+    vigilar();
   }
 })();
