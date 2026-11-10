@@ -188,6 +188,18 @@
   }
 
   // ── El enrutador de la demo ────────────────────────────────────────────────────────────
+  function respuestaPng() {
+    // Un PNG de 1×1 **transparente**: la ortofoto no existe en la demo, pero el navegador tiene
+    // que recibir una imagen válida o pinta el icono de «imagen rota» encima del contorno.
+    var base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+    var binario = atob(base64);
+    var bytes = new Uint8Array(binario.length);
+    for (var i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+    return Promise.resolve(
+      new Response(bytes, { status: 200, headers: { "Content-Type": "image/png" } })
+    );
+  }
+
   function atender(ruta, metodo, opciones) {
     var camino = ruta.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
     var partes = camino.replace(/^\/+/, "").split("/");
@@ -235,8 +247,9 @@
         { detail: "En esta demo no hay ortofoto; el contorno se dibuja con los datos de la parcela." },
         409
       );
-    if (resto.indexOf("mapa/imagen") === 0)
-      return responder({ detail: "En esta demo no hay ortofoto." }, 409);
+    // La ortofoto no existe en la demo, pero la imagen tiene que ser válida: si no, el
+    // navegador pinta el icono de imagen rota encima del contorno.
+    if (resto.indexOf("mapa/imagen") === 0) return respuestaPng();
 
     // La búsqueda del SIGPAC y el alta.
     if (resto === "sigpac/buscar") {
