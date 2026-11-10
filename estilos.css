@@ -2001,3 +2001,40 @@ button {
   }
 }
 
+
+/* El cuaderno guiado (10/11/2026): una lista de avisos con su fecha. El aviso que corre prisa se
+   marca con el símbolo, la etiqueta y el borde, no solo con el color (DESIGN.md). */
+.lista-avisos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lista-avisos__fila {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  min-height: 44px;
+  border-radius: 8px;
+  border: 1px solid var(--borde, #4a4a4a);
+}
+
+.lista-avisos__fila--prisa {
+  border-left-width: 6px;
+  border-left-color: var(--acento, #c29e6c);
+}
+
+.lista-avisos__punto {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.lista-avisos__nota {
+  display: block;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}

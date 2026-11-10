@@ -3148,6 +3148,55 @@ function VistaProductos({ tierras, campana, alEstado, alIr, alVerTierra }) {
   </div>`;
 }
 
+/**
+ * **El cuaderno guiado**: qué toca hacer en esta tierra y a partir de cuándo.
+ *
+ * El servidor manda códigos y fechas (`guia` de la ficha); el texto sale de `textos.guia`, que es
+ * la regla de la casa. Nunca dice qué producto usar ni cuándo fumigar: dice cuándo termina un plazo
+ * que ya está apuntado.
+ */
+function BloqueDeLaGuia({ estado, avisos }) {
+  const lista = Array.isArray(avisos) ? avisos : [];
+  const textoDe = (aviso) => {
+    if (aviso.codigo === "cultivo") return textos.guia.cultivo;
+    const clave = `${aviso.codigo}_${aviso.estado}`;
+    const texto = textos.guia[clave] || "";
+    return textoRelleno(texto, {
+      fecha: aviso.fecha ? fechaValidezEnTexto(aviso.fecha) : "",
+      dias: aviso.dias === null ? "" : String(aviso.dias),
+    });
+  };
+  // «Corre prisa» es para lo que está a punto de terminar (hoy o en los próximos días). Un plazo
+  // **vencido** ya se puede hacer: se dice, pero no se le pone la etiqueta de prisa.
+  const esAviso = (aviso) => ["hoy", "proximo"].includes(aviso.estado);
+  return html`<section className="tarjeta" aria-labelledby="guia-titulo" data-guia>
+    <h2 className="tarjeta__titulo" id="guia-titulo">${textos.guia.titulo}</h2>
+    ${estado === "cargando"
+      ? html`<p className="estado__texto">${textos.comun.cargando}</p>`
+      : lista.length === 0
+      ? html`<p className="estado__texto">${textos.guia.nada}</p>`
+      : html`<ul className="lista-avisos" data-guia-lista>
+          ${lista.map(
+            (aviso) => html`<li
+              key=${aviso.codigo + "-" + aviso.estado}
+              className=${"lista-avisos__fila" + (esAviso(aviso) ? " lista-avisos__fila--prisa" : "")}
+              data-guia-aviso=${aviso.codigo}
+              data-guia-estado=${aviso.estado}
+            >
+              <span className="lista-avisos__punto" aria-hidden="true">${esAviso(aviso) ? "!" : "·"}</span>
+              <span className="lista-avisos__texto">
+                ${textoDe(aviso)}
+                ${esAviso(aviso) ? html`<span className="lista-avisos__nota">${textos.guia.prisa}</span>` : null}
+                ${aviso.codigo === "cultivo"
+                  ? html`<span className="lista-avisos__nota">${textos.guia.cultivo_explica}</span>`
+                  : null}
+              </span>
+            </li>`
+          )}
+        </ul>`}
+  </section>`;
+}
+
 function VistaTierra({ tierraId, tierras, alVolver, alReintentar, alEstado, alApuntar, alIr, alVerTierra = null }) {
   const tierra = (tierras || []).find((una) => una.id === tierraId) || null;
   const ficha = usarPantalla(RUTA_TIERRA(tierraId), Boolean(tierraId));
@@ -3222,6 +3271,8 @@ function VistaTierra({ tierraId, tierras, alVolver, alReintentar, alEstado, alAp
       </div>
       ${avisoContorno ? html`<p className="panel__aviso panel__aviso--bien" data-contorno-aplicado>${avisoContorno}</p>` : null}
     </section>
+
+    <${BloqueDeLaGuia} estado=${ficha.estado} avisos=${datos.guia} />
 
     <${Panel} tierra=${tierra} alCerrar=${alVolver} alGuardar=${alReintentar} />
 

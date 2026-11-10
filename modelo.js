@@ -472,6 +472,23 @@ export const textos = {
       sinSuperficie: "Escribe las hectáreas.",
     },
   },
+  // El cuaderno guiado (10/11/2026): qué toca hacer en una tierra y a partir de cuándo. Los
+  // estados son los del servidor (`app/guia.py`): vencido, hoy, proximo, abierto y sin-fecha.
+  guia: {
+    titulo: "Qué toca hacer",
+    cosecha_vencido: "Ya se puede cosechar (el plazo terminaba el {fecha})",
+    cosecha_hoy: "Hoy termina el plazo: ya puedes cosechar",
+    cosecha_proximo: "Quedan {dias} días: no coseches antes del {fecha}",
+    cosecha_abierto: "Podrás cosechar a partir del {fecha}",
+    reentrada_vencido: "Ya se puede volver a entrar (el plazo terminaba el {fecha})",
+    reentrada_hoy: "Hoy termina el plazo para volver a entrar",
+    reentrada_proximo: "Quedan {dias} días: no entres en la tierra antes del {fecha}",
+    reentrada_abierto: "Podrás volver a entrar a partir del {fecha}",
+    cultivo: "Di qué hay sembrado en esta tierra",
+    cultivo_explica: "Así el cuaderno puede avisarte de los plazos que dependen del cultivo.",
+    nada: "Hoy no hay nada que mirar en esta tierra",
+    prisa: "Corre prisa",
+  },
   tierra: {
     volver: "Volver a las tierras",
     mapa: "El mapa de la tierra",
@@ -1502,6 +1519,14 @@ export function normalizaTierra(datos, tierras = []) {
     ),
     historial: normalizaHistorial(crudo, tierras),
     resumen: crudo.resumen || null,
+    // El cuaderno guiado: códigos y fechas tal y como los manda el servidor; el texto lo pone la
+    // pantalla con `textos.guia`.
+    guia: (Array.isArray(crudo.guia) ? crudo.guia : []).map((aviso) => ({
+      codigo: String(aviso.codigo || ""),
+      fecha: aviso.fecha || null,
+      estado: String(aviso.estado || ""),
+      dias: aviso.dias === null || aviso.dias === undefined ? null : Number(aviso.dias),
+    })),
   };
 }
 
