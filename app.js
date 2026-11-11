@@ -71,6 +71,12 @@ import {
   etiquetaDeTrabajo,
   fechaDeHoyISO,
   fechaValidezEnTexto,
+  hashDeLaVista,
+  vistaDelHash,
+  fechaDePlazo,
+  apuntesPendientes,
+  encolarApunte,
+  quitarApunteDeLaCola,
   faltasRellenables,
   filtrarPorTipo,
   filtrarTierras,
@@ -724,7 +730,7 @@ function BloqueQueFalta({ estado, lista, alReintentar }) {
   </section>`;
 }
 
-function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta }) {
+function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta, alApuntar }) {
   if (estadoVista === "cargando") return html`<${EstadoCargando} mensaje=${textos.hoy.cargando} />`;
   if (estadoVista === "error") return html`<${EstadoFallo} mensaje=${textos.hoy.fallo} alReintentar=${alReintentar} />`;
   if (estadoVista === "sin-permiso") return html`<${EstadoSinPermiso} mensaje=${textos.hoy.sinPermiso} />`;
@@ -753,7 +759,7 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta }) {
 
   const vacio = html`<div data-ultimos>
     <p className="estado__texto">${textos.hoy.vacio}</p>
-    <p><a className="boton" href="/" data-traer-tierras>${textos.hoy.vacioBoton}</a></p>
+    <p><button type="button" className="boton" data-accion="apuntar-vacio" onClick=${alApuntar}>${textos.hoy.vacioBoton}</button></p>
   </div>`;
 
   const lista = html`<ul className="lista-ultimos" data-ultimos=${ultimos.length}>${filas}</ul>`;
@@ -767,10 +773,10 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta }) {
       <p className="pagina__dato" data-contador-tierras=${contador}>${contador}</p>
     </header>
 
-    <a className="boton boton--principal boton--grande" href="/">
+    <button type="button" className="boton boton--principal boton--grande" data-accion="apuntar" onClick=${alApuntar}>
       <${Icono} nombre="apuntar" />
       ${textos.hoy.accion}
-    </a>
+    </button>
 
     <div className="tarjetas">
       <article className="tarjeta-dato" data-resumen-gastos=${contable.gastos.importe || textos.tierras.panel.noConsta}>
@@ -786,7 +792,7 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta }) {
       <article className="tarjeta-dato" data-resumen-cuaderno=${contable.cuaderno.nota || textos.tierras.panel.noConsta}>
         <h2 className="tarjeta-dato__titulo">${textos.hoy.cuaderno}</h2>
         <p className="tarjeta-dato__cifra">${contable.cuaderno.nota || textos.tierras.panel.noConsta}</p>
-        <p className="tarjeta-dato__nota">${textos.hoy.faltaCuaderno}</p>
+        <p className="tarjeta-dato__nota">${textos.hoy.cuadernoNota}</p>
       </article>
     </div>
 
@@ -2133,6 +2139,278 @@ function Fragmento({ children }) {
   return children;
 }
 
+/**
+ * **El apunte rápido**: parcela, tipo, producto con su dosis y fecha, en cuatro pasos (11/11/2026).
+ *
+ * Existe por una razón concreta: en el campo, con el móvil en una mano, el agricultor no quiere
+ * recorrer el asistente entero para apuntar un tratamiento. Cuatro pasos, y si no hay cobertura el
+ * apunte **se guarda igual** con el estado «pendiente de sincronizar» y se manda cuando vuelva.
+ *
+ * No inventa nada: la superficie tratada sale de la parcela (o del recinto del SIGPAC), la dosis y
+ * el plazo de seguridad salen de la etiqueta del producto, y el motivo lo escribe él (lo pide la
+ * Junta). El plazo de seguridad se enseña calculado, no se guarda aparte: el servidor lo vuelve a
+ * calcular con la fecha.
+ */
+function ApunteRapido({ tierras, campana, productos, alGuardado }) {
+  const [paso, setPaso] = useState(1);
+  const [tierraId, setTierraId] = useState(() => (tierras[0] ? tierras[0].id : null));
+  const [productoId, setProductoId] = useState(null);
+  const [dosis, setDosis] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [fecha, setFecha] = useState(() => fechaDeHoyISO());
+  const [aviso, setAviso] = useState(null);
+  const [resultado, setResultado] = useState(null);
+  const [pendientes, setPendientes] = useState(() => (almacenDelNavegador() ? apuntesPendientes(almacenDelNavegador()).length : 0));
+
+  const tierra = (tierras || []).find((una) => una.id === tierraId) || null;
+  const producto = (productos || []).find((uno) => uno.id === productoId) || null;
+  const plazo = producto && producto.plazo !== null && producto.plazo !== undefined
+    ? fechaDePlazo(fecha, producto.plazo)
+    : null;
+
+  useEffect(() => {
+    if (producto && producto.dosisMaxima !== null && producto.dosisMaxima !== undefined) {
+      setDosis(String(producto.dosisMaxima));
+    }
+  }, [productoId]);
+
+  const cuerpoDelApunteRapido = () => ({
+    campana_id: campana ? campana.id : null,
+    fecha,
+    tipo: "parcela",
+    parcela_id: tierraId,
+    producto_id: productoId,
+    dosis: numeroDe(dosis),
+    unidad_dosis: (producto && producto.unidad) || "L/ha",
+    // La superficie que se ha tratado: la de la parcela, que es el dato que el agricultor tiene
+    // delante y el que no hay que volver a teclear.
+    superficie_tratada_ha: tierra && tierra.superficie_ha !== null && tierra.superficie_ha !== undefined
+      ? tierra.superficie_ha
+      : null,
+    justificacion: motivo.trim(),
+  });
+
+  const validar = () => {
+    if (!tierra) return textos.enCuatroPasos.faltaParcela;
+    if (!producto) return textos.enCuatroPasos.faltaProducto;
+    if (numeroDe(dosis) === null || numeroDe(dosis) <= 0) return textos.enCuatroPasos.faltaDosis;
+    if (!motivo.trim()) return textos.enCuatroPasos.faltaMotivo;
+    return null;
+  };
+
+  const guardar = async () => {
+    const falta = validar();
+    if (falta) {
+      setAviso(falta);
+      return;
+    }
+    setAviso(null);
+    const cuerpo = cuerpoDelApunteRapido();
+    const almacen = almacenDelNavegador();
+    // **Sin cobertura no se pierde lo apuntado**: se queda en el navegador con su estado.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      if (almacen) setPendientes(encolarApunte(almacen, cuerpo).length);
+      setResultado("pendiente");
+      return;
+    }
+    const respuesta = await pedir(RUTA_TRATAMIENTOS, conCuerpoJson(cuerpo));
+    if (respuesta.estado === "ok") {
+      setResultado("guardado");
+      if (alGuardado) alGuardado();
+      return;
+    }
+    if (respuesta.estado === "error" && almacen && !respuesta.detalle) {
+      // La petición no ha llegado (sin red de verdad): se guarda para mandarla luego.
+      setPendientes(encolarApunte(almacen, cuerpo).length);
+      setResultado("pendiente");
+      return;
+    }
+    const avisos = mensajesDeLaRespuesta(respuesta.detalle);
+    setAviso(avisos.length ? avisos.join(" · ") : textos.apuntar.noSeGuardo);
+  };
+
+  const mandarLosPendientes = async () => {
+    const almacen = almacenDelNavegador();
+    if (!almacen) return;
+    let cola = apuntesPendientes(almacen);
+    let enviados = 0;
+    while (cola.length) {
+      const respuesta = await pedir(RUTA_TRATAMIENTOS, conCuerpoJson(cola[0]));
+      if (respuesta.estado !== "ok") break;
+      cola = quitarApunteDeLaCola(almacen, 0);
+      enviados += 1;
+    }
+    setPendientes(cola.length);
+    if (enviados) {
+      setResultado("guardado");
+      if (alGuardado) alGuardado();
+    }
+  };
+
+  const estiloPaso = (numero) => "apunte-rapido__paso" + (paso === numero ? " apunte-rapido__paso--aqui" : "");
+
+  return html`<section className="tarjeta" aria-labelledby="apunte-rapido-titulo" data-apunte-rapido>
+    <h2 className="tarjeta__titulo" id="apunte-rapido-titulo">${textos.enCuatroPasos.titulo}</h2>
+    <p className="tarjeta__texto">${textos.enCuatroPasos.explica}</p>
+
+    ${resultado === "guardado"
+      ? html`<p className="panel__aviso panel__aviso--bien" data-apunte-rapido-guardado>${textos.enCuatroPasos.guardado}</p>`
+      : null}
+    ${resultado === "pendiente"
+      ? html`<p className="panel__aviso" data-apunte-rapido-pendiente>${textos.enCuatroPasos.pendiente}</p>`
+      : null}
+    ${pendientes > 0
+      ? html`<p className="panel__aviso" data-apunte-rapido-cola>
+          ${textoRelleno(textos.enCuatroPasos.pendientes, { n: pendientes })}
+          <button type="button" className="boton" data-apunte-rapido-reintentar onClick=${mandarLosPendientes}>
+            ${textos.enCuatroPasos.reintentar}
+          </button>
+        </p>`
+      : null}
+
+    <ol className="apunte-rapido__pasos">
+      <li className=${estiloPaso(1)}>
+        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(1)}>
+          ${textos.enCuatroPasos.parcela}
+        </button>
+        ${paso === 1
+          ? html`<ul className="apunte-rapido__lista">
+              ${(tierras || []).map(
+                (una) => html`<li key=${una.id}>
+                  <button
+                    type="button"
+                    className=${"boton" + (una.id === tierraId ? " boton--principal" : "")}
+                    data-apunte-rapido-tierra=${una.id}
+                    onClick=${() => {
+                      setTierraId(una.id);
+                      setPaso(2);
+                    }}
+                  >
+                    ${una.alias}
+                    ${una.superficie_ha === null || una.superficie_ha === undefined
+                      ? ""
+                      : ` · ${formateaNumero(una.superficie_ha)} ${textos.tierras.panel.hectareas}`}
+                  </button>
+                </li>`
+              )}
+            </ul>`
+          : null}
+      </li>
+
+      <li className=${estiloPaso(2)}>
+        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(2)}>
+          ${textos.enCuatroPasos.tipo}
+        </button>
+        ${paso === 2
+          ? html`<p className="tarjeta__texto">${textos.enCuatroPasos.tipoTratamiento}</p>
+              <div className="estado__acciones">
+                <button type="button" className="boton boton--principal" data-apunte-rapido-tipo="tratamiento" onClick=${() => setPaso(3)}>
+                  ${textos.enCuatroPasos.tipoTratamiento}
+                </button>
+              </div>`
+          : null}
+      </li>
+
+      <li className=${estiloPaso(3)}>
+        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(3)}>
+          ${textos.enCuatroPasos.producto}
+        </button>
+        ${paso === 3
+          ? html`<div className="campo">
+              <label className="campo__etiqueta" for="apunte-rapido-producto">${textos.enCuatroPasos.producto}</label>
+              <select
+                className="campo__control"
+                id="apunte-rapido-producto"
+                data-apunte-rapido-producto
+                onChange=${(evento) => setProductoId(numeroDe(evento.target.value))}
+              >
+                <option value="">${textos.enCuatroPasos.faltaProducto}</option>
+                ${(productos || []).map(
+                  (uno) => html`<option key=${uno.id} value=${uno.id} selected=${uno.id === productoId}>
+                    ${uno.nombre}
+                  </option>`
+                )}
+              </select>
+            </div>
+            <div className="campo">
+              <label className="campo__etiqueta" for="apunte-rapido-dosis">${textos.enCuatroPasos.dosis}${producto && producto.unidad ? ` (${producto.unidad})` : ""}</label>
+              <input
+                className="campo__control"
+                id="apunte-rapido-dosis"
+                data-apunte-rapido-dosis
+                type="text"
+                inputMode="decimal"
+                enterKeyHint="next"
+                value=${dosis}
+                onChange=${(evento) => setDosis(evento.target.value)}
+              />
+            </div>
+            <div className="campo">
+              <label className="campo__etiqueta" for="apunte-rapido-motivo">${textos.enCuatroPasos.motivo}</label>
+              <input
+                className="campo__control"
+                id="apunte-rapido-motivo"
+                data-apunte-rapido-motivo
+                type="text"
+                placeholder=${textos.enCuatroPasos.motivoPista}
+                enterKeyHint="next"
+                value=${motivo}
+                onChange=${(evento) => setMotivo(evento.target.value)}
+              />
+            </div>
+            <div className="estado__acciones">
+              <button type="button" className="boton boton--principal" data-apunte-rapido-siguiente onClick=${() => { setPaso(4); setAviso(null); }}>
+                ${textos.enCuatroPasos.siguiente}
+              </button>
+            </div>`
+          : null}
+      </li>
+
+      <li className=${estiloPaso(4)}>
+        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(4)}>
+          ${textos.enCuatroPasos.fecha}
+        </button>
+        ${paso === 4
+          ? html`<div className="campo">
+              <label className="campo__etiqueta" for="apunte-rapido-fecha">${textos.enCuatroPasos.fecha}</label>
+              <input
+                className="campo__control"
+                id="apunte-rapido-fecha"
+                data-apunte-rapido-fecha
+                type="date"
+                value=${fecha}
+                onChange=${(evento) => setFecha(evento.target.value)}
+              />
+            </div>
+            <p className="tarjeta__texto" data-apunte-rapido-plazo>
+              ${plazo
+                ? textoRelleno(textos.enCuatroPasos.plazo, { fecha: fechaValidezEnTexto(plazo) })
+                : textos.enCuatroPasos.sinPlazo}
+            </p>
+            <div className="estado__acciones">
+              <button type="button" className="boton boton--principal" data-apunte-rapido-guardar onClick=${guardar}>
+                ${textos.enCuatroPasos.guardar}
+              </button>
+            </div>`
+          : null}
+      </li>
+    </ol>
+
+    ${aviso ? html`<p className="panel__aviso" data-apunte-rapido-aviso>${aviso}</p>` : null}
+  </section>`;
+}
+
+
+// El almacén del navegador, con cuidado: en un navegador que lo tiene prohibido (modo privado de
+// algunos) no se puede guardar la cola, y la pantalla tiene que seguir funcionando.
+function almacenDelNavegador() {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch (error) {
+    return null;
+  }
+}
+
 function VistaApuntar({ tierras, campana, tierraInicial, alEstado, alGuardado, alVerLaTierra, alIr }) {
   const opciones = usarOpcionesDeTrabajo();
   const catalogoProductos = usarPantalla(RUTA_PRODUCTOS, true);
@@ -2710,6 +2988,13 @@ function VistaApuntar({ tierras, campana, tierraInicial, alEstado, alGuardado, a
 
   return html`<div className="pantalla-apuntar">
     ${cabecera}
+
+    <${ApunteRapido}
+      tierras=${tierras}
+      campana=${campana}
+      productos=${productos}
+      alGuardado=${alGuardado}
+    />
 
     <section className="tarjeta" aria-labelledby="apuntar-tierra-titulo">
       <h2 className="tarjeta__titulo" id="apuntar-tierra-titulo">${textos.apuntar.tierra}</h2>
@@ -4423,7 +4708,11 @@ function avisarDeLaPantalla(pantalla) {
 }
 
 function App() {
-  const [vista, setVista] = useState("hoy");
+  // **La pestaña se lee de la URL** (CU-U2, 11/11/2026): recargar o compartir un enlace deja al
+  // agricultor en la misma pantalla, y cada pestaña tiene su `#`.
+  const [vista, setVista] = useState(
+    () => vistaDelHash(typeof location !== "undefined" ? location.hash : "") || "hoy",
+  );
   const [tierraId, setTierraId] = useState(null);
   const [arrancada, setArrancada] = useState(false);
   const [estadoSecundario, setEstadoSecundario] = useState("cargando");
@@ -4446,6 +4735,17 @@ function App() {
     };
   }, []);
 
+  // Si la URL cambia a mano (el agricultor toca «atrás» o pega un enlace con su `#`), la pantalla
+  // cambia con ella (CU-U2). No hay dos fuentes de la verdad: el hash manda cuando cambia.
+  useEffect(() => {
+    const alCambiarElHash = () => {
+      const pedida = vistaDelHash(window.location.hash);
+      if (pedida && pedida !== vista) setVista(pedida);
+    };
+    window.addEventListener("hashchange", alCambiarElHash);
+    return () => window.removeEventListener("hashchange", alCambiarElHash);
+  }, [vista]);
+
   // Al cambiar de pantalla se empieza arriba: si no, una vista hereda el scroll de la anterior y
   // los primeros botones quedan debajo de la cabecera o de la barra (medido en el móvil).
   useEffect(() => {
@@ -4467,6 +4767,15 @@ function App() {
   // no puede fallar: ver `avisarDeLaPantalla`.
   const abrirLaPantalla = (nueva) => {
     setVista(nueva);
+    // El `#` de la pestaña, para que la pantalla se pueda compartir y recargar (CU-U2).
+    try {
+      if (typeof history !== "undefined" && typeof location !== "undefined") {
+        const hash = hashDeLaVista(nueva);
+        if (location.hash !== hash) history.replaceState(null, "", hash || location.pathname);
+      }
+    } catch (fallo) {
+      /* Si el navegador no deja tocar la URL, la pantalla funciona igual. */
+    }
     avisarDeLaPantalla(nueva);
   };
 
@@ -4522,6 +4831,7 @@ function App() {
       alReintentar=${pantallaHoy.reintentar}
       resumen=${pantallaResumen}
       queFalta=${pantallaQueFalta}
+      alApuntar=${() => ir("apuntar")}
     />`;
   } else if (vista === "alta") {
     pantalla = html`<${VistaAlta}

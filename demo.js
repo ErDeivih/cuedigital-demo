@@ -25,6 +25,18 @@
 
   var DATOS = window.CUEDIGITAL_DEMO_DATOS || null;
   if (!DATOS) return;
+  // La pantalla puede saber que está en la demo (para no ofrecer enlaces que salgan del dominio).
+  window.CUEDIGITAL_DEMO = true;
+
+  // **La telemetría de pantalla, apagada en la demo** (CU-F1, 11/11/2026): la app avisa de qué
+  // pantalla se abre con `navigator.sendBeacon`, que **no pasa por `fetch`** y por tanto llegaba
+  // al servidor de GitHub Pages y contestaba 405. Aquí se sustituye por una función que no manda
+  // nada: en una demo estática no hay a quién avisar.
+  try {
+    navigator.sendBeacon = function () {
+      return true;
+    };
+  } catch (error) {}
 
   var CLAVE_TOKEN = "cuedigital.token";
   var CLAVE_TIERRA = "cuedigital.demo.tierras";
@@ -376,6 +388,18 @@
       if (enlace.getAttribute("data-demo-sin-descarga") === "1") continue;
       enlace.setAttribute("data-demo-sin-descarga", "1");
       enlace.addEventListener("click", function (evento) {
+        evento.preventDefault();
+      });
+    }
+    // **Los enlaces a la app de siempre no salen del dominio en la demo** (CU-U1, 11/11/2026): en
+    // GitHub Pages `href="/"` es el portfolio. En la demo no hay app vieja, así que el enlace no
+    // navega: la pantalla se queda donde está.
+    var salidas = document.querySelectorAll('a[href="/"]');
+    for (var k = 0; k < salidas.length; k++) {
+      var salida = salidas[k];
+      if (salida.getAttribute("data-demo-sin-salida") === "1") continue;
+      salida.setAttribute("data-demo-sin-salida", "1");
+      salida.addEventListener("click", function (evento) {
         evento.preventDefault();
       });
     }
