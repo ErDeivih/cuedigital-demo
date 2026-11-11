@@ -261,6 +261,11 @@ export const textos = {
   },
   cuaderno: {
     titulo: "Cuaderno",
+    descargar: "Descargar el cuaderno",
+    descargarExplica: "El cuaderno en PDF, con tus tierras y lo que tienes apuntado.",
+    descargarPdf: "Descargar el cuaderno (PDF)",
+    bajando: "Preparando el PDF…",
+    noSePudoBajar: "No se ha podido bajar el cuaderno. Inténtalo otra vez.",
     intro: "Lo que falta para que el registro esté completo, y dónde se arregla cada cosa.",
     faltan: "Faltan {n} cosas",
     faltaUna: "Falta 1 cosa",
@@ -526,6 +531,7 @@ export const textos = {
     sinHoy: "Hoy no hay nada apuntado en esta tierra.",
     cargandoHoy: "Trayendo lo de hoy…",
     historial: "Historial",
+    plazoHasta: "plazo hasta {fecha}",
     sinHistorial: "No hay años anteriores guardados.",
     cargandoHistorial: "Trayendo el historial…",
     noDisponible: "El historial de la tierra todavía no está en la pantalla nueva.",
@@ -1280,6 +1286,9 @@ export function normalizaTrabajo(item, tierras = []) {
     variedad: t.variedad ?? null,
     producto: t.producto ?? t.materia_activa ?? t.maquina ?? null,
     detalle: t.detalle ?? null,
+    // La fecha en la que termina el plazo de seguridad de un tratamiento (la pone el servidor con
+    // los días de la etiqueta); `null` si el plazo no está apuntado.
+    plazoHasta: t.plazo_hasta ? String(t.plazo_hasta).slice(0, 10) : null,
     anulado: Boolean(t.anulado),
   };
 }
@@ -1458,6 +1467,11 @@ export function normalizaFilaDeHistorial(item, tierras = []) {
   if (trabajo.hectareas !== null) detalles.push(`${formateaNumero(trabajo.hectareas)} ${textos.tierras.panel.hectareas}`);
   const mes = mesEnPalabras(trabajo.fecha) || mesDeNumero(item && item.mes) || nombrePropio(item && item.mes);
   if (mes) detalles.push(mes);
+  // **La cuenta atrás del plazo de seguridad** (11/11/2026): «plazo hasta 26/11». Solo si el
+  // servidor trae la fecha; si no hay plazo apuntado, no se pone nada (no se inventa).
+  if (trabajo.plazoHasta) {
+    detalles.push(textoRelleno(textos.tierra.plazoHasta, { fecha: fechaValidezEnTexto(trabajo.plazoHasta) }));
+  }
   return { ...trabajo, detalles, mes };
 }
 

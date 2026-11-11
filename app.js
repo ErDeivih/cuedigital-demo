@@ -3045,6 +3045,61 @@ function BotonSiguiente({ texto, alPulsar }) {
   return html`<button type="button" className="boton boton--principal" data-siguiente-paso=${texto} onClick=${alPulsar}>${texto}</button>`;
 }
 
+/**
+ * **Descargar el cuaderno en PDF** (11/11/2026): el servidor escribe el cuaderno con las tierras y
+ * sus apuntes. La descarga se pide con el vale de la cuenta (no es un enlace a pelo: la puerta pide
+ * permiso) y se entrega como fichero, sin salir de la pantalla.
+ */
+function DescargarElCuaderno() {
+  const [aviso, setAviso] = useState(null);
+  const [bajando, setBajando] = useState(false);
+
+  const descargar = async () => {
+    setAviso(null);
+    setBajando(true);
+    try {
+      const token = leerToken();
+      const respuesta = await fetch(urlDeLaApi("/api/cuaderno/pdf"), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!respuesta.ok) {
+        setAviso(textos.cuaderno.noSePudoBajar);
+        return;
+      }
+      const blob = await respuesta.blob();
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement("a");
+      enlace.href = url;
+      enlace.download = "cuaderno-de-campo.pdf";
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (fallo) {
+      setAviso(textos.cuaderno.noSePudoBajar);
+    } finally {
+      setBajando(false);
+    }
+  };
+
+  return html`<section className="tarjeta" data-descargar-cuaderno>
+    <h2 className="tarjeta__titulo">${textos.cuaderno.descargar}</h2>
+    <p className="tarjeta__texto">${textos.cuaderno.descargarExplica}</p>
+    <div className="estado__acciones">
+      <button
+        type="button"
+        className="boton boton--principal"
+        data-descargar-cuaderno-pdf
+        onClick=${descargar}
+        disabled=${bajando}
+      >
+        ${bajando ? textos.cuaderno.bajando : textos.cuaderno.descargarPdf}
+      </button>
+    </div>
+    ${aviso ? html`<p className="panel__aviso" data-descargar-cuaderno-aviso>${aviso}</p>` : null}
+  </section>`;
+}
+
 function VistaCuaderno({ alEstado, alIr }) {
   const pantalla = usarPantalla(RUTA_QUE_FALTA, true);
   // Este hook va antes de cualquier return: si vive detrás de los estados de carga, React ve
@@ -3102,6 +3157,7 @@ function VistaCuaderno({ alEstado, alIr }) {
     return html`<div>
       ${cabecera}
       <p className="estado__texto">${textos.cuaderno.completo}</p>
+      <${DescargarElCuaderno} />
       <a className="boton" href="/">${textos.cuaderno.abrirJv}</a>
     </div>`;
   }
@@ -3195,6 +3251,7 @@ function VistaCuaderno({ alEstado, alIr }) {
     ${avisoDeLoQueBloquea}
     ${resumenDelCuaderno}
     ${bloques}
+    <${DescargarElCuaderno} />
     <p><a className="boton" href="/">${textos.cuaderno.abrirJv}</a></p>
   </div>`;
 }

@@ -392,14 +392,28 @@
       });
     }
     // **Los enlaces a la app de siempre no salen del dominio en la demo** (CU-U1, 11/11/2026): en
-    // GitHub Pages `href="/"` es el portfolio. En la demo no hay app vieja, así que el enlace no
-    // navega: la pantalla se queda donde está.
-    var salidas = document.querySelectorAll('a[href="/"]');
+    // GitHub Pages `href="/"` es el portfolio. Y una pestaña que no lleva a ninguna parte es peor
+    // que no tenerla, así que en la demo **se esconden**: las pantallas que sí existen (Trabajos,
+    // Productos, Facturas, Cuaderno…) son botones y funcionan.
+    var salidas = document.querySelectorAll(
+      'a[href="/"].nav__enlace, a[href="/"].tarjeta, .barra-superior a[href="/"]'
+    );
     for (var k = 0; k < salidas.length; k++) {
       var salida = salidas[k];
-      if (salida.getAttribute("data-demo-sin-salida") === "1") continue;
-      salida.setAttribute("data-demo-sin-salida", "1");
+      if (salida.getAttribute("data-demo-oculta") === "1") continue;
+      salida.setAttribute("data-demo-oculta", "1");
+      salida.style.display = "none";
       salida.addEventListener("click", function (evento) {
+        evento.preventDefault();
+      });
+    }
+    // Lo que no se esconde, tampoco navega fuera.
+    var otros = document.querySelectorAll('a[href="/"]');
+    for (var m = 0; m < otros.length; m++) {
+      var otro = otros[m];
+      if (otro.getAttribute("data-demo-sin-salida") === "1") continue;
+      otro.setAttribute("data-demo-sin-salida", "1");
+      otro.addEventListener("click", function (evento) {
         evento.preventDefault();
       });
     }
