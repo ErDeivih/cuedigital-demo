@@ -417,6 +417,12 @@
         evento.preventDefault();
       });
     }
+    // **Bajar el cuaderno en PDF no se puede en la demo** (11/11/2026): no hay servidor que lo
+    // escriba. Antes que dejar un botón que no hace nada, se esconde la tarjeta entera.
+    var bajadas = document.querySelectorAll('[data-descargar-cuaderno]');
+    for (var q = 0; q < bajadas.length; q++) {
+      bajadas[q].style.display = "none";
+    }
   }
 
   function vigilar() {
