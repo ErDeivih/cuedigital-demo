@@ -2103,6 +2103,7 @@ function BloqueDeHistorial({ estado, anios, alReintentar }) {
         <span className="grupo__cuenta">${[delAnio, superficie].filter(Boolean).join(" · ")}</span>
       </h3>
       ${anio.filas.map((fila, indice) => html`<article className="historial__fila" key=${`fila-${anio.anio}-${indice}`}>
+        <span className="historial__fecha" data-historial-fecha=${fila.fecha || ""}>${fechaDe(fila.fecha)}</span>
         <span className="trabajo__titulo">${fila.etiqueta}</span>
         ${fila.detalles.length ? html`<span className="trabajo__detalle">${fila.detalles.join(" · ")}</span>` : null}
       </article>`)}

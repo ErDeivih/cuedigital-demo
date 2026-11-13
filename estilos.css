@@ -2451,3 +2451,10 @@ button {
     padding: var(--space-2) 0 0;
   }
 }
+
+/* La fecha del día en la fila del historial: sin ella, «noviembre» no fecha una labor. */
+.historial__fecha {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
