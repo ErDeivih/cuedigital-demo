@@ -77,6 +77,7 @@ import {
   apuntesPendientes,
   encolarApunte,
   quitarApunteDeLaCola,
+  faltasDelCuaderno,
   faltasRellenables,
   filtrarPorTipo,
   filtrarTierras,
@@ -84,6 +85,7 @@ import {
   importeEnTexto,
   leyendaDe,
   lineasDeLosContornos,
+  mandarLosApuntesPendientes,
   mensajesDeLaRespuesta,
   mesEnPalabras,
   municipioDeTierra,
@@ -526,8 +528,19 @@ function cajaDeLasTierras(tierras, municipios) {
 // ---------------------------------------------------------------- estados
 
 function EstadoCargando({ mensaje }) {
-  return html`<div className="estado" role="status" aria-live="polite">
+  // **Un esqueleto, no una pantalla en blanco** (encargo de UI, 13/11/2026). Antes solo se veía
+  // una frase y, si la respuesta tardaba, el contenido aparecía de golpe y empujaba lo de abajo.
+  // El esqueleto ocupa el sitio desde el primer momento, así que no hay salto; el texto sigue
+  // siendo el que anuncia qué se está trayendo y se lee con el lector de pantalla.
+  return html`<div className="estado estado--cargando" role="status" aria-live="polite" aria-busy="true">
     <p className="estado__texto">${mensaje}</p>
+    <div className="esqueleto" aria-hidden="true">
+      <div className="esqueleto__titulo"></div>
+      <div className="esqueleto__linea"></div>
+      <div className="esqueleto__linea esqueleto__linea--corta"></div>
+      <div className="esqueleto__bloque"></div>
+      <div className="esqueleto__bloque"></div>
+    </div>
   </div>`;
 }
 
@@ -563,6 +576,43 @@ function EstadoNoDisponible({ alReintentar }) {
 }
 
 // ---------------------------------------------------------------- armazón
+
+function BarraDeConexion({ sinCobertura, pendientes, alEnviar, enviando, mensaje }) {
+  // **El estado de la cobertura y la cola, en un solo sitio y siempre a la vista** (13/11/2026).
+  // Sin cobertura en el campo no es un error: es lo normal. Se dice qué pasa y qué puede hacer,
+  // sin alarma y sin ofrecer un botón que no va a poder funcionar.
+  if (!sinCobertura && pendientes === 0 && !mensaje) return null;
+  const textoDeLaCola = pendientes === 1
+    ? textos.comun.pendienteDeEnviar
+    : textoRelleno(textos.comun.pendientesDeEnviar, { n: pendientes });
+  return html`<div
+    className=${sinCobertura ? "aviso-conexion-global aviso-conexion-global--sin" : "aviso-conexion-global"}
+    role="status"
+    aria-live="polite"
+    data-aviso-conexion=${sinCobertura ? "sin-cobertura" : "pendiente"}
+  >
+    ${sinCobertura
+      ? html`<p className="aviso-conexion-global__texto">${textos.comun.avisoSinCobertura}</p>`
+      : null}
+    ${mensaje
+      ? html`<p className="aviso-conexion-global__mensaje" data-aviso-envio>${mensaje}</p>`
+      : null}
+    ${pendientes > 0
+      ? html`<div className="aviso-conexion-global__cola" data-aviso-pendientes=${pendientes}>
+          <p className="aviso-conexion-global__texto">${textoDeLaCola}</p>
+          <button
+            type="button"
+            className="boton"
+            data-aviso-enviar
+            disabled=${sinCobertura || enviando}
+            onClick=${alEnviar}
+          >
+            ${enviando ? textos.comun.enviando : textos.comun.enviarAhora}
+          </button>
+        </div>`
+      : null}
+  </div>`;
+}
 
 function BarraSuperior({ finca, campana, cuenta, sinCobertura }) {
   const nombreFinca = (finca && finca.nombre) || textos.app.nombre;
@@ -766,6 +816,22 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta, alApunt
 
   const contable = normalizaResumen(resumen.estado === "listo" ? resumen.datos : null);
   const falta = normalizaQueFalta(queFalta.estado === "listo" ? queFalta.datos : null);
+  // **Una sola verdad para el cuaderno** (13/11/2026). Antes la tarjeta decía «faltan 3 cosas»
+  // —lo que contesta `/api/nuevo/resumen`— y debajo la lista decía «No falta nada para el
+  // cuaderno» —lo que contesta `/api/nuevo/que-falta`—: dos avisos contrarios en la misma
+  // pantalla, y el agricultor sin saber a cuál creer. Manda la lista, que es la que dice qué
+  // falta y dónde se arregla; la tarjeta repite esa misma cuenta y no enseña la nota del resumen
+  // cuando la lista dice que no falta nada (`faltasDelCuaderno`).
+  const cuantasFaltan = faltasDelCuaderno(
+    queFalta.estado === "listo" ? queFalta.datos : null,
+    resumen.estado === "listo" ? resumen.datos : null,
+  ).faltan;
+  const textoDelCuaderno = cuantasFaltan === 0
+    ? textos.cuaderno.completo
+    : cuantasFaltan === 1
+      ? textos.cuaderno.faltaUna
+      : textoRelleno(textos.cuaderno.faltan, { n: cuantasFaltan });
+  const mostrarQueFalta = queFalta.estado !== "listo" || cuantasFaltan > 0;
 
   return html`<div className="pantalla-hoy">
     <header className="pagina__cabecera" data-titulo=${textos.hoy.titulo}>
@@ -789,10 +855,12 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta, alApunt
         <p className="tarjeta-dato__cifra">${contable.ventas.importe || textos.tierras.panel.noConsta}</p>
         <p className="tarjeta-dato__nota">${contable.ventas.nota || textos.tierras.panel.noConsta}</p>
       </article>
-      <article className="tarjeta-dato" data-resumen-cuaderno=${contable.cuaderno.nota || textos.tierras.panel.noConsta}>
+      <article className="tarjeta-dato" data-resumen-cuaderno=${textoDelCuaderno}>
         <h2 className="tarjeta-dato__titulo">${textos.hoy.cuaderno}</h2>
-        <p className="tarjeta-dato__cifra">${contable.cuaderno.nota || textos.tierras.panel.noConsta}</p>
-        <p className="tarjeta-dato__nota">${textos.hoy.cuadernoNota}</p>
+        <p className="tarjeta-dato__cifra">${textoDelCuaderno}</p>
+        ${cuantasFaltan > 0
+          ? html`<p className="tarjeta-dato__nota">${contable.cuaderno.nota || textos.hoy.cuadernoNota}</p>`
+          : null}
       </article>
     </div>
 
@@ -801,7 +869,9 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta, alApunt
       ${ultimos.length ? lista : vacio}
     </section>
 
-    <${BloqueQueFalta} estado=${queFalta.estado} lista=${falta} alReintentar=${queFalta.reintentar} />
+    ${mostrarQueFalta
+      ? html`<${BloqueQueFalta} estado=${queFalta.estado} lista=${falta} alReintentar=${queFalta.reintentar} />`
+      : null}
   </div>`;
 }
 
@@ -2161,6 +2231,18 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
   const [aviso, setAviso] = useState(null);
   const [resultado, setResultado] = useState(null);
   const [pendientes, setPendientes] = useState(() => (almacenDelNavegador() ? apuntesPendientes(almacenDelNavegador()).length : 0));
+  const [busquedaParcela, setBusquedaParcela] = useState("");
+
+  // La cola vive en el navegador y la enseña también la barra de arriba: cuando cambia se avisa
+  // para que las dos digan lo mismo. Un evento del navegador, no un estado compartido: la barra no
+  // es hija de esta tarjeta.
+  const avisarDeLaCola = () => {
+    try {
+      window.dispatchEvent(new CustomEvent("cuedigital-cola"));
+    } catch (error) {
+      /* Si el navegador no deja lanzar eventos, la tarjeta sigue diciendo la verdad. */
+    }
+  };
 
   const tierra = (tierras || []).find((una) => una.id === tierraId) || null;
   const producto = (productos || []).find((uno) => uno.id === productoId) || null;
@@ -2211,6 +2293,7 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       if (almacen) setPendientes(encolarApunte(almacen, cuerpo).length);
       setResultado("pendiente");
+      avisarDeLaCola();
       return;
     }
     const respuesta = await pedir(RUTA_TRATAMIENTOS, conCuerpoJson(cuerpo));
@@ -2223,6 +2306,7 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
       // La petición no ha llegado (sin red de verdad): se guarda para mandarla luego.
       setPendientes(encolarApunte(almacen, cuerpo).length);
       setResultado("pendiente");
+      avisarDeLaCola();
       return;
     }
     const avisos = mensajesDeLaRespuesta(respuesta.detalle);
@@ -2231,26 +2315,68 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
 
   const mandarLosPendientes = async () => {
     const almacen = almacenDelNavegador();
-    if (!almacen) return;
-    let cola = apuntesPendientes(almacen);
-    let enviados = 0;
-    while (cola.length) {
-      const respuesta = await pedir(RUTA_TRATAMIENTOS, conCuerpoJson(cola[0]));
-      if (respuesta.estado !== "ok") break;
-      cola = quitarApunteDeLaCola(almacen, 0);
-      enviados += 1;
-    }
-    setPendientes(cola.length);
+    const { enviados, restantes } = await mandarLosApuntesPendientes(almacen, (apunte) =>
+      pedir(RUTA_TRATAMIENTOS, conCuerpoJson(apunte)),
+    );
+    setPendientes(restantes);
+    avisarDeLaCola();
     if (enviados) {
       setResultado("guardado");
       if (alGuardado) alGuardado();
     }
   };
 
-  const estiloPaso = (numero) => "apunte-rapido__paso" + (paso === numero ? " apunte-rapido__paso--aqui" : "");
+  // **Un paso a la vez, con su cuenta y su barra** (encargo de UI, 13/11/2026). Metido en la
+  // pantalla de apuntar, este flujo tenía los cuatro pasos sin decir en cuál se estaba; con el
+  // móvil en una mano, saber que quedan dos pasos es lo que evita abandonar a la mitad.
+  const pasoEnTexto = textoRelleno(textos.enCuatroPasos.pasoDe, { n: paso });
+  const textoBuscadoParcela = busquedaParcela.trim().toLowerCase();
+  const tierrasVisibles = (tierras || []).filter(
+    (una) => !textoBuscadoParcela
+      || String(una.alias || "").toLowerCase().includes(textoBuscadoParcela)
+      || String(una.municipio || "").toLowerCase().includes(textoBuscadoParcela),
+  );
+  const estiloPaso = (numero) => {
+    const clases = ["apunte-rapido__paso"];
+    if (paso === numero) clases.push("apunte-rapido__paso--aqui");
+    if (paso > numero) clases.push("apunte-rapido__paso--hecho");
+    return clases.join(" ");
+  };
+  const tramosDeLaBarra = [1, 2, 3, 4].map((numero) => html`<span
+    key=${`tramo-${numero}`}
+    className=${"apunte-rapido__tramo" + (paso >= numero ? " apunte-rapido__tramo--hecho" : "")}
+  ></span>`);
+  const cabeceraDelPaso = (numero, texto) => html`<button
+    type="button"
+    className="apunte-rapido__titulo"
+    aria-expanded=${paso === numero}
+    aria-controls=${`apunte-rapido-paso-${numero}`}
+    onClick=${() => setPaso(numero)}
+  >${texto}</button>`;
+  const resumenDeLaParcela = tierra
+    ? html`<p className="apunte-rapido__resumen" data-apunte-rapido-resumen>
+        <span className="apunte-rapido__resumen-etiqueta">${textos.enCuatroPasos.parcelaElegida}</span>
+        <span>${tierra.alias}${tierra.superficie_ha === null || tierra.superficie_ha === undefined
+          ? ""
+          : ` · ${formateaNumero(tierra.superficie_ha)} ${textos.tierras.panel.hectareas}`}</span>
+      </p>`
+    : null;
+  const botonAtras = (destino) => html`<button
+    type="button"
+    className="boton"
+    data-apunte-rapido-atras
+    onClick=${() => {
+      setPaso(destino);
+      setAviso(null);
+    }}
+  >${textos.enCuatroPasos.atras}</button>`;
 
-  return html`<section className="tarjeta" aria-labelledby="apunte-rapido-titulo" data-apunte-rapido>
-    <h2 className="tarjeta__titulo" id="apunte-rapido-titulo">${textos.enCuatroPasos.titulo}</h2>
+  return html`<section className="tarjeta apunte-rapido" aria-labelledby="apunte-rapido-titulo" data-apunte-rapido>
+    <div className="apunte-rapido__cabecera">
+      <h2 className="tarjeta__titulo" id="apunte-rapido-titulo">${textos.enCuatroPasos.titulo}</h2>
+      <p className="apunte-rapido__progreso" data-paso-de=${paso} aria-live="polite">${pasoEnTexto}</p>
+      <div className="apunte-rapido__barra" aria-hidden="true">${tramosDeLaBarra}</div>
+    </div>
     <p className="tarjeta__texto">${textos.enCuatroPasos.explica}</p>
 
     ${resultado === "guardado"
@@ -2268,129 +2394,152 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
         </p>`
       : null}
 
+    ${resumenDeLaParcela}
+
     <ol className="apunte-rapido__pasos">
-      <li className=${estiloPaso(1)}>
-        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(1)}>
-          ${textos.enCuatroPasos.parcela}
-        </button>
+      <li className=${estiloPaso(1)} aria-current=${paso === 1 ? "step" : undefined}>
+        ${cabeceraDelPaso(1, textos.enCuatroPasos.parcela)}
         ${paso === 1
-          ? html`<ul className="apunte-rapido__lista">
-              ${(tierras || []).map(
-                (una) => html`<li key=${una.id}>
-                  <button
-                    type="button"
-                    className=${"boton" + (una.id === tierraId ? " boton--principal" : "")}
-                    data-apunte-rapido-tierra=${una.id}
-                    onClick=${() => {
-                      setTierraId(una.id);
-                      setPaso(2);
-                    }}
-                  >
-                    ${una.alias}
-                    ${una.superficie_ha === null || una.superficie_ha === undefined
-                      ? ""
-                      : ` · ${formateaNumero(una.superficie_ha)} ${textos.tierras.panel.hectareas}`}
-                  </button>
-                </li>`
-              )}
-            </ul>`
-          : null}
-      </li>
-
-      <li className=${estiloPaso(2)}>
-        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(2)}>
-          ${textos.enCuatroPasos.tipo}
-        </button>
-        ${paso === 2
-          ? html`<p className="tarjeta__texto">${textos.enCuatroPasos.tipoTratamiento}</p>
-              <div className="estado__acciones">
-                <button type="button" className="boton boton--principal" data-apunte-rapido-tipo="tratamiento" onClick=${() => setPaso(3)}>
-                  ${textos.enCuatroPasos.tipoTratamiento}
-                </button>
-              </div>`
-          : null}
-      </li>
-
-      <li className=${estiloPaso(3)}>
-        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(3)}>
-          ${textos.enCuatroPasos.producto}
-        </button>
-        ${paso === 3
-          ? html`<div className="campo">
-              <label className="campo__etiqueta" for="apunte-rapido-producto">${textos.enCuatroPasos.producto}</label>
-              <select
-                className="campo__control"
-                id="apunte-rapido-producto"
-                data-apunte-rapido-producto
-                onChange=${(evento) => setProductoId(numeroDe(evento.target.value))}
-              >
-                <option value="">${textos.enCuatroPasos.faltaProducto}</option>
-                ${(productos || []).map(
-                  (uno) => html`<option key=${uno.id} value=${uno.id} selected=${uno.id === productoId}>
-                    ${uno.nombre}
-                  </option>`
-                )}
-              </select>
-            </div>
-            <div className="campo">
-              <label className="campo__etiqueta" for="apunte-rapido-dosis">${textos.enCuatroPasos.dosis}${producto && producto.unidad ? ` (${producto.unidad})` : ""}</label>
-              <input
-                className="campo__control"
-                id="apunte-rapido-dosis"
-                data-apunte-rapido-dosis
-                type="text"
-                inputMode="decimal"
-                enterKeyHint="next"
-                value=${dosis}
-                onChange=${(evento) => setDosis(evento.target.value)}
-              />
-            </div>
-            <div className="campo">
-              <label className="campo__etiqueta" for="apunte-rapido-motivo">${textos.enCuatroPasos.motivo}</label>
-              <input
-                className="campo__control"
-                id="apunte-rapido-motivo"
-                data-apunte-rapido-motivo
-                type="text"
-                placeholder=${textos.enCuatroPasos.motivoPista}
-                enterKeyHint="next"
-                value=${motivo}
-                onChange=${(evento) => setMotivo(evento.target.value)}
-              />
-            </div>
-            <div className="estado__acciones">
-              <button type="button" className="boton boton--principal" data-apunte-rapido-siguiente onClick=${() => { setPaso(4); setAviso(null); }}>
-                ${textos.enCuatroPasos.siguiente}
-              </button>
+          ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-1">
+              ${(tierras || []).length > 8
+                ? html`<label className="buscador">
+                    <span>${textos.enCuatroPasos.buscarParcela}</span>
+                    <input
+                      className="buscador__campo"
+                      type="search"
+                      enterKeyHint="search"
+                      data-apunte-rapido-buscar
+                      value=${busquedaParcela}
+                      placeholder=${textos.enCuatroPasos.pistaDeBusqueda}
+                      onChange=${(evento) => setBusquedaParcela(evento.target.value)}
+                    />
+                  </label>`
+                : null}
+              ${tierrasVisibles.length
+                ? html`<ul className="apunte-rapido__lista">
+                    ${tierrasVisibles.map(
+                      (una) => html`<li key=${una.id}>
+                        <button
+                          type="button"
+                          className=${"apunte-rapido__opcion" + (una.id === tierraId ? " apunte-rapido__opcion--elegida" : "")}
+                          data-apunte-rapido-tierra=${una.id}
+                          aria-pressed=${una.id === tierraId}
+                          onClick=${() => {
+                            setTierraId(una.id);
+                            setPaso(2);
+                          }}
+                        >
+                          <span className="apunte-rapido__opcion-nombre">${una.alias}</span>
+                          <span className="apunte-rapido__opcion-detalle">
+                            ${una.superficie_ha === null || una.superficie_ha === undefined
+                              ? una.municipio || ""
+                              : `${formateaNumero(una.superficie_ha)} ${textos.tierras.panel.hectareas}`}
+                          </span>
+                        </button>
+                      </li>`
+                    )}
+                  </ul>`
+                : html`<p className="estado__texto">${textos.tierras.vacio}</p>`}
             </div>`
           : null}
       </li>
 
-      <li className=${estiloPaso(4)}>
-        <button type="button" className="apunte-rapido__titulo" onClick=${() => setPaso(4)}>
-          ${textos.enCuatroPasos.fecha}
-        </button>
+      <li className=${estiloPaso(2)} aria-current=${paso === 2 ? "step" : undefined}>
+        ${cabeceraDelPaso(2, textos.enCuatroPasos.tipo)}
+        ${paso === 2
+          ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-2">
+              <div className="apunte-rapido__acciones">
+                ${botonAtras(1)}
+                <button type="button" className="boton boton--principal" data-apunte-rapido-tipo="tratamiento" onClick=${() => setPaso(3)}>
+                  ${textos.enCuatroPasos.tipoTratamiento}
+                </button>
+              </div>
+            </div>`
+          : null}
+      </li>
+
+      <li className=${estiloPaso(3)} aria-current=${paso === 3 ? "step" : undefined}>
+        ${cabeceraDelPaso(3, textos.enCuatroPasos.producto)}
+        ${paso === 3
+          ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-3">
+              <div className="campo">
+                <label className="campo__etiqueta" for="apunte-rapido-producto">${textos.enCuatroPasos.producto}</label>
+                <select
+                  className="campo__control"
+                  id="apunte-rapido-producto"
+                  data-apunte-rapido-producto
+                  onChange=${(evento) => setProductoId(numeroDe(evento.target.value))}
+                >
+                  <option value="">${textos.enCuatroPasos.faltaProducto}</option>
+                  ${(productos || []).map(
+                    (uno) => html`<option key=${uno.id} value=${uno.id} selected=${uno.id === productoId}>
+                      ${uno.nombre}
+                    </option>`
+                  )}
+                </select>
+              </div>
+              <div className="campo">
+                <label className="campo__etiqueta" for="apunte-rapido-dosis">${textos.enCuatroPasos.dosis}${producto && producto.unidad ? ` (${producto.unidad})` : ""}</label>
+                <input
+                  className="campo__control"
+                  id="apunte-rapido-dosis"
+                  data-apunte-rapido-dosis
+                  type="text"
+                  inputMode="decimal"
+                  enterKeyHint="next"
+                  value=${dosis}
+                  onChange=${(evento) => setDosis(evento.target.value)}
+                />
+              </div>
+              <div className="campo">
+                <label className="campo__etiqueta" for="apunte-rapido-motivo">${textos.enCuatroPasos.motivo}</label>
+                <input
+                  className="campo__control"
+                  id="apunte-rapido-motivo"
+                  data-apunte-rapido-motivo
+                  type="text"
+                  placeholder=${textos.enCuatroPasos.motivoPista}
+                  enterKeyHint="next"
+                  value=${motivo}
+                  onChange=${(evento) => setMotivo(evento.target.value)}
+                />
+              </div>
+              <div className="apunte-rapido__acciones">
+                ${botonAtras(2)}
+                <button type="button" className="boton boton--principal" data-apunte-rapido-siguiente onClick=${() => { setPaso(4); setAviso(null); }}>
+                  ${textos.enCuatroPasos.siguiente}
+                </button>
+              </div>
+            </div>`
+          : null}
+      </li>
+
+      <li className=${estiloPaso(4)} aria-current=${paso === 4 ? "step" : undefined}>
+        ${cabeceraDelPaso(4, textos.enCuatroPasos.fecha)}
         ${paso === 4
-          ? html`<div className="campo">
-              <label className="campo__etiqueta" for="apunte-rapido-fecha">${textos.enCuatroPasos.fecha}</label>
-              <input
-                className="campo__control"
-                id="apunte-rapido-fecha"
-                data-apunte-rapido-fecha
-                type="date"
-                value=${fecha}
-                onChange=${(evento) => setFecha(evento.target.value)}
-              />
-            </div>
-            <p className="tarjeta__texto" data-apunte-rapido-plazo>
-              ${plazo
-                ? textoRelleno(textos.enCuatroPasos.plazo, { fecha: fechaValidezEnTexto(plazo) })
-                : textos.enCuatroPasos.sinPlazo}
-            </p>
-            <div className="estado__acciones">
-              <button type="button" className="boton boton--principal" data-apunte-rapido-guardar onClick=${guardar}>
-                ${textos.enCuatroPasos.guardar}
-              </button>
+          ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-4">
+              <div className="campo">
+                <label className="campo__etiqueta" for="apunte-rapido-fecha">${textos.enCuatroPasos.fecha}</label>
+                <input
+                  className="campo__control"
+                  id="apunte-rapido-fecha"
+                  data-apunte-rapido-fecha
+                  type="date"
+                  value=${fecha}
+                  onChange=${(evento) => setFecha(evento.target.value)}
+                />
+              </div>
+              <p className="tarjeta__texto" data-apunte-rapido-plazo>
+                ${plazo
+                  ? textoRelleno(textos.enCuatroPasos.plazo, { fecha: fechaValidezEnTexto(plazo) })
+                  : textos.enCuatroPasos.sinPlazo}
+              </p>
+              <div className="apunte-rapido__acciones">
+                ${botonAtras(3)}
+                <button type="button" className="boton boton--principal" data-apunte-rapido-guardar onClick=${guardar}>
+                  ${textos.enCuatroPasos.guardar}
+                </button>
+              </div>
             </div>`
           : null}
       </li>
@@ -3130,9 +3279,9 @@ function VistaCuaderno({ alEstado, alIr }) {
   const cabecera = html`<header className="pagina__cabecera">
     <h1 className="pagina__titulo">${textos.cuaderno.titulo}</h1>
     <p className="pagina__dato">${textos.cuaderno.intro}</p>
-    ${pantalla.estado === "listo"
+    ${pantalla.estado === "listo" && cuantas > 0
       ? html`<p className="pagina__dato" data-que-falta-cuenta>
-          ${cuantas === 0 ? textos.cuaderno.completo : cuantas === 1 ? textos.cuaderno.faltaUna : textoRelleno(textos.cuaderno.faltan, { n: cuantas })}
+          ${cuantas === 1 ? textos.cuaderno.faltaUna : textoRelleno(textos.cuaderno.faltan, { n: cuantas })}
         </p>`
       : null}
   </header>`;
@@ -3741,7 +3890,7 @@ function VistaCalendario({ tierras, alEstado }) {
   </div>`;
 }
 
-function VistaTrabajos({ tierras, alEstado }) {
+function VistaTrabajos({ tierras, alEstado, alIr }) {
   const [tipo, setTipo] = useState(null);
   const [tierraId, setTierraId] = useState("");
   const [desde, setDesde] = useState("");
@@ -3792,6 +3941,11 @@ function VistaTrabajos({ tierras, alEstado }) {
 
   if (pantalla.estado === "sin-permiso") {
     return html`<div>${cabecera}<${EstadoSinPermiso} mensaje=${textos.comun.sinPermiso} /></div>`;
+  }
+  // **La carga también se dice** (encargo de UI, 13/11/2026): antes se pintaban los filtros con
+  // la lista vacía y el agricultor leía «no hay trabajos» mientras los trabajos venían de camino.
+  if (pantalla.estado === "cargando") {
+    return html`<div>${cabecera}<${EstadoCargando} mensaje=${textos.trabajos.cargando} /></div>`;
   }
   if (pantalla.estado === "error" || pantalla.estado === "no-disponible") {
     const avisoDelServidor = mensajesDeLaRespuesta(pantalla.detalle).join(" · ");
@@ -3867,7 +4021,18 @@ function VistaTrabajos({ tierras, alEstado }) {
     ${tarjetasDeResumen.length ? html`<div className="tarjetas" aria-label=${textos.trabajos.resumenPorTipo}>${tarjetasDeResumen}</div>` : null}
     ${visibles.length
       ? html`<ul className="trabajos-lista">${filas}</ul>`
-      : html`<p className="estado__texto">${datos.trabajos.length ? textos.trabajos.sinTrabajos : textos.trabajos.sinDatos}</p>`}
+      : html`<div className="estado estado--vacio" data-trabajos-vacio=${visibles.length}>
+          <p className="estado__texto">${datos.trabajos.length ? textos.trabajos.sinTrabajos : textos.trabajos.sinDatos}</p>
+          <div className="estado__acciones">
+            ${datos.trabajos.length
+              ? html`<button type="button" className="boton" data-trabajos-quitar-filtros onClick=${() => { setTipo(null); setTierraId(""); setDesde(""); setHasta(""); }}>
+                  ${textos.trabajos.quitarFiltros}
+                </button>`
+              : html`<button type="button" className="boton boton--principal" data-trabajos-apuntar onClick=${() => alIr && alIr("apuntar")}>
+                  ${textos.trabajos.apuntarUno}
+                </button>`}
+          </div>
+        </div>`}
   </div>`;
 }
 
@@ -4774,6 +4939,15 @@ function App() {
   const [arrancada, setArrancada] = useState(false);
   const [estadoSecundario, setEstadoSecundario] = useState("cargando");
   const [sinCobertura, setSinCobertura] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  // **La cola del móvil, en el armazón** (13/11/2026): si un apunte no se pudo mandar, se dice
+  // arriba aunque el agricultor esté en otra pantalla. El estado vive aquí y la tarjeta del
+  // apunte avisa con un evento cuando cambia, para que las dos cuenten lo mismo.
+  const [pendientes, setPendientes] = useState(() => {
+    const almacen = almacenDelNavegador();
+    return almacen ? apuntesPendientes(almacen).length : 0;
+  });
+  const [enviandoLaCola, setEnviandoLaCola] = useState(false);
+  const [avisoDeLaCola, setAvisoDeLaCola] = useState(null);
 
   // El primer pintado es siempre «cargando»: la pantalla acaba de abrirse y todavía no se ha
   // preguntado nada. En el siguiente paso se decide de verdad (sin vale → entrar; si no llega →
@@ -4857,6 +5031,58 @@ function App() {
   const pantallaResumen = usarPantalla(RUTA_RESUMEN, vista === "hoy");
   const pantallaQueFalta = usarPantalla(RUTA_QUE_FALTA, vista === "hoy");
 
+  const contarLaCola = () => {
+    const almacen = almacenDelNavegador();
+    setPendientes(almacen ? apuntesPendientes(almacen).length : 0);
+  };
+
+  // **Mandar la cola nunca es obligatorio para seguir apuntando**: si falla, se dice y se queda
+  // guardada. Manda en orden, y al terminar refresca la pantalla para que el apunte salga en su
+  // sitio (o desaparezca el aviso, que es lo que el agricultor está mirando).
+  const enviarLaCola = async () => {
+    const almacen = almacenDelNavegador();
+    if (!almacen || enviandoLaCola) return;
+    setEnviandoLaCola(true);
+    const { enviados, restantes } = await mandarLosApuntesPendientes(almacen, (apunte) =>
+      pedir(RUTA_TRATAMIENTOS, conCuerpoJson(apunte)),
+    );
+    setPendientes(restantes);
+    setEnviandoLaCola(false);
+    setAvisoDeLaCola(enviados ? textos.comun.enviado : textos.comun.noSePudoEnviar);
+    if (enviados) {
+      if (pantallaHoy.reintentar) pantallaHoy.reintentar();
+      if (pantallaTierras.reintentar) pantallaTierras.reintentar();
+    }
+  };
+
+  // La tarjeta del apunte avisa con un evento del navegador (no comparte estado con el armazón).
+  useEffect(() => {
+    const alCambiarLaCola = () => contarLaCola();
+    window.addEventListener("cuedigital-cola", alCambiarLaCola);
+    return () => window.removeEventListener("cuedigital-cola", alCambiarLaCola);
+    // `contarLaCola` solo usa estados que no cambian de identidad; se registra una vez.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // **Al volver la cobertura, la cola se manda sola** (es lo que promete el aviso de «sin
+  // cobertura»). Si falla, no se pierde nada: se queda guardada y se avisa.
+  useEffect(() => {
+    const alVolverLaCobertura = () => {
+      const almacen = almacenDelNavegador();
+      if (almacen && apuntesPendientes(almacen).length) enviarLaCola();
+    };
+    window.addEventListener("online", alVolverLaCobertura);
+    return () => window.removeEventListener("online", alVolverLaCobertura);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // El aviso de «ya está enviado» se va solo: no se queda pegado en la pantalla del campo.
+  useEffect(() => {
+    if (!avisoDeLaCola) return undefined;
+    const reloj = setTimeout(() => setAvisoDeLaCola(null), 6000);
+    return () => clearTimeout(reloj);
+  }, [avisoDeLaCola]);
+
   const actual = vista === "hoy" ? pantallaHoy : pantallaTierras;
   const datosDeLaFinca = pantallaHoy.datos || pantallaTierras.datos || null;
   const tierras = (pantallaTierras.datos && pantallaTierras.datos.tierras) || [];
@@ -4935,7 +5161,7 @@ function App() {
   } else if (vista === "calendario") {
     pantalla = html`<${VistaCalendario} tierras=${tierras} alEstado=${setEstadoSecundario} />`;
   } else if (vista === "trabajos") {
-    pantalla = html`<${VistaTrabajos} tierras=${tierras} alEstado=${setEstadoSecundario} />`;
+    pantalla = html`<${VistaTrabajos} tierras=${tierras} alEstado=${setEstadoSecundario} alIr=${ir} />`;
   } else if (vista === "facturas") {
     pantalla = html`<${VistaFacturas} alEstado=${setEstadoSecundario} alIr=${ir} />`;
   } else if (vista === "mas") {
@@ -4957,6 +5183,13 @@ function App() {
       campana=${datosDeLaFinca && datosDeLaFinca.campana}
       cuenta=${datosDeLaFinca && datosDeLaFinca.cuenta}
       sinCobertura=${sinCobertura}
+    />
+    <${BarraDeConexion}
+      sinCobertura=${sinCobertura}
+      pendientes=${pendientes}
+      alEnviar=${enviarLaCola}
+      enviando=${enviandoLaCola}
+      mensaje=${avisoDeLaCola}
     />
     <div className="cuerpo">
       <${BarraLateral} vista=${vista} ir=${ir} />

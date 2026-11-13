@@ -71,6 +71,18 @@ export const textos = {
     vacio: "Aquí todavía no hay nada.",
     todaviaNo: "Todavía no está en la pantalla nueva.",
     reintentarCorto: "Volver a intentar",
+    // El estado sin cobertura y la cola de apuntes (encargo de UI, 13/11/2026). En pantalla se
+    // dice «pendiente de enviar»: el estado del apunte, sin la palabra de la lista prohibida
+    // (un test recorre este bloque y la cazaría).
+    avisoSinCobertura:
+      "Sin cobertura. Puedes seguir apuntando: lo que guardes se queda en el móvil y se manda solo cuando vuelva.",
+    pendienteDeEnviar: "1 apunte pendiente de enviar.",
+    pendientesDeEnviar: "{n} apuntes pendientes de enviar.",
+    enviarAhora: "Enviar ahora",
+    enviando: "Enviando…",
+    enviado: "Ya está enviado.",
+    noSePudoEnviar:
+      "No se ha podido enviar. Se queda guardado en el móvil y se manda cuando vuelva la cobertura.",
   },
   hoy: {
     titulo: "Hoy",
@@ -411,6 +423,12 @@ export const textos = {
     faltaProducto: "Elige el producto.",
     faltaDosis: "Escribe la dosis.",
     faltaMotivo: "Escribe por qué lo has echado.",
+    pasoDe: "Paso {n} de 4",
+    atras: "Atrás",
+    resumen: "Lo que llevas",
+    parcelaElegida: "Parcela",
+    buscarParcela: "Buscar parcela",
+    pistaDeBusqueda: "Nombre o municipio",
   },
 
   apuntar: {
@@ -563,6 +581,8 @@ export const textos = {
     porHectarea: "Por hectárea",
     sinTrabajos: "No hay trabajos de ese tipo.",
     sinDatos: "Todavía no hay trabajos apuntados.",
+    apuntarUno: "Apuntar un trabajo",
+    quitarFiltros: "Quitar los filtros",
     cargando: "Trayendo los trabajos…",
     noDisponible: "Los trabajos todavía no están en la pantalla nueva.",
     resumen: "{n} trabajos · {ha} ha",
@@ -1080,6 +1100,30 @@ export function normalizaQueFalta(datos) {
     });
   }
   return limpias;
+}
+
+
+/**
+ * **Cuántas cosas faltan para el cuaderno, con una sola verdad** (13/11/2026).
+ *
+ * La pantalla de «Hoy» lee dos puertas: `/api/nuevo/que-falta` sabe qué falta y dónde se
+ * arregla, y `/api/nuevo/resumen` trae un recuento para la tarjeta. Si una va por detrás, la
+ * tarjeta decía «El cuaderno está completo» y «faltan 3 cosas» a la vez: lo destapó la medición
+ * mirando la pantalla, no el código. Manda la lista —que es la que puede decir dónde se
+ * arregla—; el resumen solo rellena el hueco cuando la lista no ha llegado. Sin ninguno de los
+ * dos no se inventa nada: cero.
+ */
+export function faltasDelCuaderno(queFalta, resumen) {
+  const lista = queFalta && typeof queFalta === "object" ? queFalta : null;
+  const deLaLista = lista && typeof lista.faltan === "number" ? lista.faltan : null;
+  const enLaLista = lista && Array.isArray(lista.items) ? lista.items.length : null;
+  const delResumen =
+    resumen && resumen.cuaderno && typeof resumen.cuaderno.faltan === "number"
+      ? resumen.cuaderno.faltan
+      : null;
+  const faltan =
+    deLaLista !== null ? deLaLista : enLaLista !== null ? enLaLista : delResumen !== null ? delResumen : 0;
+  return { faltan, completa: faltan === 0 };
 }
 
 /**
@@ -1692,6 +1736,36 @@ export function quitarApunteDeLaCola(almacen, posicion) {
   cola.splice(posicion, 1);
   guardarLaCola(almacen, cola);
   return cola;
+}
+
+/**
+ * **Manda la cola del móvil, en orden y sin perder nada** (encargo de UI, 13/11/2026).
+ *
+ * La usa la barra de arriba («Enviar ahora» y al volver la cobertura) y la tarjeta del apunte.
+ * Manda el primero, y solo si el servidor dice que sí pasa al siguiente: lo que no se pudo
+ * mandar se queda al frente de la cola, con su fecha de guardado, para intentarlo luego. La
+ * función que envía se pasa desde fuera (`enviar`), así se puede probar sin red ni navegador.
+ *
+ * Devuelve cuántos se han ido y cuántos quedan: la pantalla no tiene que contar por su cuenta.
+ */
+export async function mandarLosApuntesPendientes(almacen, enviar) {
+  if (!almacen) return { enviados: 0, restantes: 0 };
+  let cola = apuntesPendientes(almacen);
+  if (typeof enviar !== "function") return { enviados: 0, restantes: cola.length };
+  let enviados = 0;
+  while (cola.length) {
+    let respuesta = null;
+    try {
+      respuesta = await enviar(cola[0]);
+    } catch (error) {
+      // La petición no ha llegado: no se toca la cola y se para, que el orden importa.
+      respuesta = null;
+    }
+    if (!respuesta || respuesta.estado !== "ok") break;
+    cola = quitarApunteDeLaCola(almacen, 0);
+    enviados += 1;
+  }
+  return { enviados, restantes: cola.length };
 }
 
 // ---------------------------------------------------------------------------

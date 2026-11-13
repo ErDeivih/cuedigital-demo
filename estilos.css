@@ -24,6 +24,7 @@
   --brand: #175c33;
   --brand-bright: #1e7a43;
   --brand-tint: #ddebdf;
+  --brand-ink: #175c33;
   --accent: #9a5b12;
   --accent-tint: #f6e7ce;
   --info: #1c4f7a;
@@ -69,6 +70,7 @@
     --brand: #2e7d4f;
     --brand-bright: #5cc98b;
     --brand-tint: #24382d;
+    --brand-ink: #8fd3a8;
     --accent: #e0a458;
     --accent-tint: #3a2c17;
     --info: #7fb6e8;
@@ -308,7 +310,7 @@ button {
 }
 
 .barra-inferior__destino--activo {
-  color: var(--brand);
+  color: var(--brand-ink);
   font-weight: 600;
 }
 
@@ -814,7 +816,7 @@ button {
   font-size: 0.95rem;
   line-height: 20px;
   font-weight: 700;
-  color: var(--brand);
+  color: var(--brand-ink);
 }
 
 .pantalla-trabajos .tarjetas {
@@ -918,7 +920,10 @@ button {
   position: relative;
   width: 100%;
   max-width: 820px;
+  /* `100vh` cuenta la barra del navegador y en un móvil la ventana se sale por abajo: se deja
+   * como respaldo y se añade `100dvh`, que es el alto que de verdad se ve (13/11/2026). */
   max-height: calc(100vh - 2 * var(--space-4));
+  max-height: calc(100dvh - 2 * var(--space-4));
   overflow: auto;
   padding: var(--space-5);
   background: var(--surface-card);
@@ -1318,7 +1323,7 @@ button {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-pill);
   background: var(--brand-tint);
-  color: var(--brand);
+  color: var(--brand-ink);
   font-size: 1rem;
   line-height: 20px;
   font-weight: 700;
@@ -1623,12 +1628,14 @@ button {
   stroke-width: 6;
 }
 
-/* El foco del teclado tiene que verse: el trazo cambia de color y engorda. */
+/* El foco del teclado tiene que verse: el trazo cambia de color y engorda, y **el contorno del
+ * sistema se queda** (2 px del token de foco, `DESIGN.md` §Foco). Quitarlo dejaba el foco de un
+ * trozo de parcela a merced de un cambio de color de 3 px: lo cazó `ai-design-check`
+ * (`focus-ring-removed`) y tenía razón. */
 .mapa__anillo--recinto:focus,
 .mapa__anillo--recinto:focus-visible {
   stroke: var(--focus);
   stroke-width: 6;
-  outline: none;
 }
 
 /* El dedo no acierta en un trazo de 3 px: detrás va el mismo camino con un trazo de 60 px
@@ -1807,7 +1814,7 @@ button {
 .calendario__cuenta {
   font-size: 0.95rem;
   line-height: 20px;
-  color: var(--brand);
+  color: var(--brand-ink);
   font-weight: 600;
   text-align: center;
   overflow-wrap: anywhere;
@@ -2020,12 +2027,12 @@ button {
   padding: 12px;
   min-height: 44px;
   border-radius: 8px;
-  border: 1px solid var(--borde, #4a4a4a);
+  border: 1px solid var(--border-subtle);
 }
 
 .lista-avisos__fila--prisa {
   border-left-width: 6px;
-  border-left-color: var(--acento, #c29e6c);
+  border-left-color: var(--accent);
 }
 
 .lista-avisos__punto {
@@ -2033,8 +2040,322 @@ button {
   line-height: 1.2;
 }
 
+/* La nota va en su color del sistema: una opacidad encima del texto no es un token y, con el
+ * sol de frente, deja de leerse. */
 .lista-avisos__nota {
   display: block;
   font-size: 0.95rem;
-  opacity: 0.85;
+  color: var(--ink-muted);
+}
+
+
+/* ================================================================
+ * Estados y conexión (encargo de UI, 13/11/2026)
+ * ================================================================ */
+
+/* La carga ocupa su sitio desde el primer momento con un esqueleto de los tokens del sistema.
+ * Sin animación a propósito: en el campo, al sol, una animación no se ve y cuesta. El esqueleto
+ * va oculto al lector de pantalla, que ya tiene el texto de «trayendo…». */
+.estado--cargando {
+  width: 100%;
+}
+
+.esqueleto {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 640px;
+}
+
+.esqueleto__titulo,
+.esqueleto__linea,
+.esqueleto__bloque {
+  background: var(--surface-sunk);
+  border-radius: var(--radius-sm);
+}
+
+.esqueleto__titulo {
+  height: 26px;
+  width: 45%;
+}
+
+.esqueleto__linea {
+  height: 16px;
+  width: 100%;
+}
+
+.esqueleto__linea--corta {
+  width: 60%;
+}
+
+.esqueleto__bloque {
+  height: 88px;
+  border-radius: var(--radius-md);
+}
+
+/* El vacío, con su salida: el texto y el botón que lo arregla. */
+.estado--vacio {
+  gap: var(--space-3);
+}
+
+/* **Sin cobertura y cola de apuntes**, en una franja debajo de la cabecera. Lleva palabras y no
+ * solo color (DESIGN.md). Sin cobertura se dice que se puede seguir apuntando; con apuntes
+ * esperando se dice cuántos y se ofrece mandarlos, sin ofrecer lo que no puede funcionar. */
+.aviso-conexion-global {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--warning-tint);
+  border-bottom: 1px solid var(--warning);
+  color: var(--warning);
+  font-weight: 600;
+}
+
+/* Sin cobertura se marca además con el borde de aviso: informa el color **y** la palabra
+ * («Sin cobertura»), nunca el color solo. */
+.aviso-conexion-global--sin {
+  border-left: 4px solid var(--warning);
+}
+
+.aviso-conexion-global__texto {
+  margin: 0;
+  max-width: 80ch;
+  color: inherit;
+}
+
+.aviso-conexion-global__mensaje {
+  margin: 0;
+  color: inherit;
+}
+
+.aviso-conexion-global__cola {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.aviso-conexion-global__cola .boton {
+  border-color: var(--warning);
+  background: var(--surface-card);
+  color: var(--warning);
+  font-weight: 700;
+}
+
+.aviso-conexion-global__cola .boton:disabled {
+  border-color: var(--border-subtle);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .aviso-conexion-global__cola {
+    align-items: stretch;
+  }
+
+  .aviso-conexion-global__cola .boton {
+    width: 100%;
+  }
+}
+
+/* ================================================================
+ * El apunte en cuatro pasos (registrar labor con una mano)
+ * ================================================================ */
+
+/* La tarjeta se lee de un vistazo y se toca con una mano: un paso abierto cada vez, un botón
+ * grande para seguir y otro para volver. Todo sale de los tokens del sistema; sin sombras,
+ * degradados ni animación. */
+.apunte-rapido {
+  gap: var(--space-3);
+}
+
+.apunte-rapido__cabecera {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.apunte-rapido__progreso {
+  font-size: 0.95rem;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+
+.apunte-rapido__barra {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+  height: 8px;
+}
+
+.apunte-rapido__tramo {
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunk);
+}
+
+.apunte-rapido__tramo--hecho {
+  background: var(--brand);
+}
+
+.apunte-rapido__pasos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.apunte-rapido__paso {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  overflow: hidden;
+}
+
+.apunte-rapido__paso--aqui {
+  border-color: var(--brand);
+}
+
+.apunte-rapido__titulo {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--toque);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.apunte-rapido__paso--aqui .apunte-rapido__titulo {
+  background: var(--brand-tint);
+  color: var(--brand-ink);
+  font-weight: 700;
+}
+
+.apunte-rapido__paso--hecho .apunte-rapido__titulo {
+  color: var(--ink-muted);
+}
+
+.apunte-rapido__cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  max-width: 720px;
+}
+
+.apunte-rapido__lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 720px;
+}
+
+.apunte-rapido__opcion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--toque);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--ink);
+  text-align: left;
+}
+
+.apunte-rapido__opcion:hover {
+  background: var(--surface-sunk);
+}
+
+.apunte-rapido__opcion--elegida {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand-ink);
+}
+
+.apunte-rapido__opcion-nombre {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.apunte-rapido__opcion-detalle {
+  font-size: 0.95rem;
+  line-height: 18px;
+  color: var(--ink-muted);
+}
+
+.apunte-rapido__opcion--elegida .apunte-rapido__opcion-detalle {
+  color: var(--brand-ink);
+}
+
+.apunte-rapido__resumen {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunk);
+  font-weight: 600;
+}
+
+.apunte-rapido__resumen-etiqueta {
+  font-size: 0.95rem;
+  line-height: 18px;
+  color: var(--ink-muted);
+}
+
+/* La acción principal, a lo ancho y a la derecha; la de volver, a la izquierda. Así se llega
+ * con el pulgar y no hay dos botones del mismo tamaño peleando. */
+.apunte-rapido__acciones {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.apunte-rapido__acciones .boton {
+  min-height: var(--toque);
+}
+
+.apunte-rapido__acciones .boton--principal {
+  flex: 1 1 auto;
+}
+
+/* A 390 px, el botón de seguir ocupa el ancho y el de volver queda debajo: dos blancos
+ * grandes, ninguno por debajo de 48 px, y sin que se salga nada por la derecha. */
+@media (max-width: 480px) {
+  .apunte-rapido__cuerpo {
+    padding: var(--space-3) var(--space-3) var(--space-4);
+    max-width: none;
+  }
+
+  .apunte-rapido__lista {
+    max-width: none;
+  }
+
+  .apunte-rapido__acciones {
+    flex-wrap: wrap;
+  }
+
+  .apunte-rapido__acciones .boton--principal {
+    width: 100%;
+    order: -1;
+  }
 }
