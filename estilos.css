@@ -2412,3 +2412,42 @@ button {
   margin-left: auto;
   color: var(--ink-muted);
 }
+
+/* ================================================================
+ * La tarjeta del apunte, compacta (segunda ronda, 13/11/2026)
+ * ================================================================ */
+
+/* El título y «Paso N de 4» en la misma fila, y solo el paso abierto debajo: la tarjeta tiene que
+ * caber a 390 px sin cortar ningún campo. */
+.apunte-rapido__fila {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.apunte-rapido__rotulo {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 18px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.apunte-rapido__paso--aqui {
+  padding: var(--space-2);
+}
+
+/* El cuerpo va dentro del paso abierto: sin borde ni relleno de más, que es lo que hacía que la
+ * tarjeta midiera 904 px y no cupiera en un móvil de 844. */
+.apunte-rapido__cuerpo {
+  border-top: 0;
+  padding: var(--space-2) 0 0;
+}
+
+@media (max-width: 480px) {
+  .apunte-rapido__cuerpo {
+    padding: var(--space-2) 0 0;
+  }
+}

@@ -2356,29 +2356,22 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
   // pantalla de apuntar, este flujo tenía los cuatro pasos sin decir en cuál se estaba; con el
   // móvil en una mano, saber que quedan dos pasos es lo que evita abandonar a la mitad.
   const pasoEnTexto = textoRelleno(textos.enCuatroPasos.pasoDe, { n: paso });
+  const rotulosDeLosPasos = [
+    textos.enCuatroPasos.parcela,
+    textos.enCuatroPasos.tipo,
+    textos.enCuatroPasos.producto,
+    textos.enCuatroPasos.fecha,
+  ];
   const textoBuscadoParcela = busquedaParcela.trim().toLowerCase();
   const tierrasVisibles = (tierras || []).filter(
     (una) => !textoBuscadoParcela
       || String(una.alias || "").toLowerCase().includes(textoBuscadoParcela)
       || String(una.municipio || "").toLowerCase().includes(textoBuscadoParcela),
   );
-  const estiloPaso = (numero) => {
-    const clases = ["apunte-rapido__paso"];
-    if (paso === numero) clases.push("apunte-rapido__paso--aqui");
-    if (paso > numero) clases.push("apunte-rapido__paso--hecho");
-    return clases.join(" ");
-  };
   const tramosDeLaBarra = [1, 2, 3, 4].map((numero) => html`<span
     key=${`tramo-${numero}`}
     className=${"apunte-rapido__tramo" + (paso >= numero ? " apunte-rapido__tramo--hecho" : "")}
   ></span>`);
-  const cabeceraDelPaso = (numero, texto) => html`<button
-    type="button"
-    className="apunte-rapido__titulo"
-    aria-expanded=${paso === numero}
-    aria-controls=${`apunte-rapido-paso-${numero}`}
-    onClick=${() => setPaso(numero)}
-  >${texto}</button>`;
   const resumenDeLaParcela = tierra
     ? html`<p className="apunte-rapido__resumen" data-apunte-rapido-resumen>
         <span className="apunte-rapido__resumen-etiqueta">${textos.enCuatroPasos.parcelaElegida}</span>
@@ -2399,11 +2392,12 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
 
   return html`<section className="tarjeta apunte-rapido" aria-labelledby="apunte-rapido-titulo" data-apunte-rapido>
     <div className="apunte-rapido__cabecera">
-      <h2 className="tarjeta__titulo" id="apunte-rapido-titulo">${textos.enCuatroPasos.titulo}</h2>
-      <p className="apunte-rapido__progreso" data-paso-de=${paso} aria-live="polite">${pasoEnTexto}</p>
+      <div className="apunte-rapido__fila">
+        <h2 className="tarjeta__titulo" id="apunte-rapido-titulo">${textos.enCuatroPasos.titulo}</h2>
+        <p className="apunte-rapido__progreso" data-paso-de=${paso} aria-live="polite">${pasoEnTexto}</p>
+      </div>
       <div className="apunte-rapido__barra" aria-hidden="true">${tramosDeLaBarra}</div>
     </div>
-    <p className="tarjeta__texto">${textos.enCuatroPasos.explica}</p>
 
     ${resultado
       ? html`<p className="panel__aviso panel__aviso--bien" data-apunte-rapido-guardado>
@@ -2428,9 +2422,8 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
 
     ${resumenDeLaParcela}
 
-    <ol className="apunte-rapido__pasos">
-      <li className=${estiloPaso(1)} aria-current=${paso === 1 ? "step" : undefined}>
-        ${cabeceraDelPaso(1, textos.enCuatroPasos.parcela)}
+    <div className="apunte-rapido__paso apunte-rapido__paso--aqui" data-apunte-rapido-paso=${paso}>
+      <p className="apunte-rapido__rotulo" data-apunte-rapido-rotulo>${rotulosDeLosPasos[paso - 1]}</p>
         ${paso === 1
           ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-1">
               ${(tierras || []).length > 8
@@ -2474,10 +2467,7 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
                 : html`<p className="estado__texto">${textos.tierras.vacio}</p>`}
             </div>`
           : null}
-      </li>
 
-      <li className=${estiloPaso(2)} aria-current=${paso === 2 ? "step" : undefined}>
-        ${cabeceraDelPaso(2, textos.enCuatroPasos.tipo)}
         ${paso === 2
           ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-2">
               <div className="apunte-rapido__acciones">
@@ -2488,10 +2478,7 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
               </div>
             </div>`
           : null}
-      </li>
 
-      <li className=${estiloPaso(3)} aria-current=${paso === 3 ? "step" : undefined}>
-        ${cabeceraDelPaso(3, textos.enCuatroPasos.producto)}
         ${paso === 3
           ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-3">
               <div className="campo">
@@ -2544,10 +2531,7 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
               </div>
             </div>`
           : null}
-      </li>
 
-      <li className=${estiloPaso(4)} aria-current=${paso === 4 ? "step" : undefined}>
-        ${cabeceraDelPaso(4, textos.enCuatroPasos.fecha)}
         ${paso === 4
           ? html`<div className="apunte-rapido__cuerpo" id="apunte-rapido-paso-4">
               <div className="campo">
@@ -2574,8 +2558,7 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
               </div>
             </div>`
           : null}
-      </li>
-    </ol>
+    </div>
 
     ${aviso ? html`<p className="panel__aviso" data-apunte-rapido-aviso>${aviso}</p>` : null}
   </section>`;
