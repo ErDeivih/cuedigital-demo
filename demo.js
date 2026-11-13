@@ -41,6 +41,7 @@
   var CLAVE_TOKEN = "cuedigital.token";
   var CLAVE_TIERRA = "cuedigital.demo.tierras";
   var CLAVE_DATOS = "cuedigital.demo.datos";
+  var CLAVE_TRABAJOS = "cuedigital.demo.trabajos";
 
   // La pantalla necesita un vale para no enseñar «sin permiso». En la demo es uno de mentira:
   // no se manda a ningún sitio porque no hay red.
@@ -62,6 +63,47 @@
     try {
       localStorage.setItem(CLAVE_TIERRA, JSON.stringify(lista));
     } catch (error) {}
+  }
+
+  // **Los apuntes que se guardan en la demo** (13/11/2026): antes, «Enviar ahora» decía «Ya está
+  // enviado.» y el apunte se quedaba en el aire (no había servidor que lo recibiera ni lista donde
+  // saliera). La demo promete que lo apuntado «se queda en este navegador», así que aquí se guarda
+  // en el navegador y se suma a la lista de trabajos. Nada sale de la máquina de quien la prueba.
+  function trabajosGuardados() {
+    try {
+      var crudo = localStorage.getItem(CLAVE_TRABAJOS);
+      return crudo ? JSON.parse(crudo) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function guardarTrabajos(lista) {
+    try {
+      localStorage.setItem(CLAVE_TRABAJOS, JSON.stringify(lista));
+    } catch (error) {}
+  }
+
+  function trabajoDesdeElApunte(cuerpo) {
+    var tierras = (DATOS.tierras && DATOS.tierras.tierras) || [];
+    var tierra = tierras.filter(function (una) {
+      return Number(una.id) === Number(cuerpo && cuerpo.parcela_id);
+    })[0];
+    var apunte = cuerpo || {};
+    return {
+      id: "demo-" + Date.now(),
+      fecha: apunte.fecha || new Date().toISOString().slice(0, 10),
+      tipo: apunte.tipo === "parcela" ? "tratamiento" : apunte.tipo || "tratamiento",
+      titulo: "Tratamiento de ejemplo",
+      producto: "Producto de ejemplo",
+      dosis: apunte.dosis == null ? null : apunte.dosis,
+      unidad: apunte.unidad_dosis || null,
+      hectareas: apunte.superficie_tratada_ha == null ? null : apunte.superficie_tratada_ha,
+      justificacion: apunte.justificacion || null,
+      plazo_hasta: null,
+      parcela_id: apunte.parcela_id == null ? null : apunte.parcela_id,
+      tierra_alias: tierra ? tierra.alias : null,
+    };
   }
 
   // ── Utilidades de las respuestas ────────────────────────────────────────────────────────
@@ -240,12 +282,25 @@
       var hoy = clonar(DATOS.hoy);
       var lista = tierrasParaLaLista();
       if (hoy && hoy.tierras) hoy.tierras = lista.totales;
+      var ultimosGuardados = trabajosGuardados().map(function (trabajo) {
+        return {
+          tipo: trabajo.tipo,
+          fecha: trabajo.fecha,
+          tierra: trabajo.tierra_alias,
+          titulo: trabajo.titulo,
+        };
+      });
+      if (hoy && hoy.ultimos) hoy.ultimos = ultimosGuardados.concat(hoy.ultimos);
       return responder(hoy);
     }
     if (resto === "nuevo/tierras") return responder(tierrasParaLaLista());
     if (resto === "nuevo/resumen") return responder(DATOS.resumen);
     if (resto === "nuevo/que-falta") return responder(DATOS.que_falta);
-    if (resto.indexOf("nuevo/trabajos") === 0) return responder(DATOS.trabajos);
+    if (resto.indexOf("nuevo/trabajos") === 0) {
+      var trabajos = clonar(DATOS.trabajos);
+      trabajos.trabajos = trabajosGuardados().concat(trabajos.trabajos || []);
+      return responder(trabajos);
+    }
     if (resto.indexOf("nuevo/calendario") === 0) return responder(DATOS.calendario);
     if (resto.indexOf("nuevo/tierra/") === 0) {
       var identificador = Number(resto.split("/").pop());
@@ -320,6 +375,16 @@
     }
     if (resto.indexOf("parcelas/") === 0 && metodo === "PUT") {
       return responder({ ok: true });
+    }
+    // **Guardar un apunte en la demo** (13/11/2026). Se guarda en el navegador y se devuelve
+    // creado; el historial lo enseña. Sin esto, la cola se vaciaba con «Ya está enviado.» y el
+    // apunte no estaba en ningún sitio.
+    if (resto === "tratamientos" && metodo === "POST") {
+      var apunteGuardado = trabajoDesdeElApunte(cuerpo);
+      var listaDeTrabajos = trabajosGuardados();
+      listaDeTrabajos.unshift(apunteGuardado);
+      guardarTrabajos(listaDeTrabajos);
+      return responder(apunteGuardado, 201);
     }
 
     // Cualquier otra puerta de la API: se contesta con una lista vacía y la pantalla no se rompe.

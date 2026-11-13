@@ -816,7 +816,7 @@ button {
   font-size: 0.95rem;
   line-height: 20px;
   font-weight: 700;
-  color: var(--brand-ink);
+  color: var(--brand);
 }
 
 .pantalla-trabajos .tarjetas {
