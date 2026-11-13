@@ -2359,3 +2359,56 @@ button {
     order: -1;
   }
 }
+
+/* ================================================================
+ * El cuaderno que se puede comprobar (revisión externa, 13/11/2026)
+ * ================================================================ */
+
+/* La confirmación de lo guardado se queda puesta: no es un aviso que se va, es el estado. Dice
+ * cuántos apuntes hay guardados y cuántos esperan para enviarse, con palabras y no solo color. */
+.cuaderno__guardado {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-left: 4px solid var(--success);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Las últimas labores: fecha, qué se hizo y en qué tierra, en una fila que se lee de un vistazo. */
+.cuaderno__labores {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cuaderno__labor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+
+.cuaderno__labor-fecha {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  font-weight: 600;
+}
+
+.cuaderno__labor-que {
+  font-weight: 600;
+}
+
+.cuaderno__labor-tierra {
+  margin-left: auto;
+  color: var(--ink-muted);
+}

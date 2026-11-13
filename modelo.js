@@ -289,6 +289,20 @@ export const textos = {
     faltan: "Faltan {n} cosas",
     faltaUna: "Falta 1 cosa",
     completo: "El cuaderno está completo.",
+    ultimasLabores: "Últimas labores",
+    sinLabores: "Todavía no hay labores apuntadas.",
+    verTodosLosApuntes: "Ver todos los apuntes",
+    apuntarUnTrabajo: "Apuntar un trabajo",
+    campana: "Campaña {campana}",
+    campanaSinAnio: "La campaña de este año",
+    pendientesCero: "0 apartados pendientes",
+    pendientesUno: "1 apartado pendiente",
+    pendientesVarias: "{n} apartados pendientes",
+    alDia: "El resto de apartados, al día.",
+    guardadoAquiUno: "Guardado en este móvil: 1 apunte.",
+    guardadoAqui: "Guardado en este móvil: {n} apuntes.",
+    sinApuntesAqui: "Aquí todavía no hay apuntes guardados en este móvil.",
+    guardadoEnElCuaderno: "Guardado en el cuaderno.",
     bloquea: "Bloquea el envío a la Junta",
     arreglar: "Arreglar",
     abrirJv: "Abrir el cuaderno de la Junta",
@@ -657,6 +671,66 @@ export const textos = {
     yaEstaba: "Esa factura ya estaba guardada.",
   },
 };
+
+/**
+ * **Dónde estás, en los cinco destinos de la barra inferior** (revisión externa, 13/11/2026).
+ *
+ * Hasta hoy la barra marcaba Hoy, Tierras y Calendario, y tomaba «Más» por su cuenta. En Cuaderno
+ * o Productos no se marcaba nada: la pantalla no sabía decir dónde estabas. Una sola función
+ * decide el destino activo y la barra solo obedece.
+ */
+export function destinoActivo(vista) {
+  const v = String(vista || "").trim();
+  if (v === "hoy") return "hoy";
+  if (v === "tierras" || v === "alta" || v === "tierra") return "tierras";
+  if (v === "apuntar") return "apuntar";
+  if (v === "calendario") return "calendario";
+  if (["mas", "trabajos", "facturas", "cuaderno", "productos"].includes(v)) return "mas";
+  return null;
+}
+
+/**
+ * **Cuántos apuntes están guardados en este navegador.** Solo la demo los guarda aquí (en la app
+ * de verdad van al servidor); fuera de la demo devuelve 0 y la pantalla no promete nada.
+ */
+export function apuntesGuardadosAqui(almacen) {
+  if (!almacen) return 0;
+  try {
+    const crudo = almacen.getItem("cuedigital.demo.trabajos");
+    const lista = crudo ? JSON.parse(crudo) : [];
+    return Array.isArray(lista) ? lista.length : 0;
+  } catch (error) {
+    return 0;
+  }
+}
+
+/**
+ * **La confirmación de lo guardado, que se queda puesta** (revisión externa, 13/11/2026).
+ *
+ * Tener cobertura no demuestra que el apunte esté guardado, y un aviso que se va tampoco. Aquí se
+ * dice cuántos hay guardados y cuántos esperan para enviarse; en la demo, que se quedan en este
+ * móvil; en la app, que están en el cuaderno.
+ */
+export function textoDeLoGuardado({ guardados = 0, pendientes = 0, demo = false } = {}) {
+  const cola =
+    pendientes === 1
+      ? textos.comun.pendienteDeEnviar
+      : pendientes > 1
+        ? textoRelleno(textos.comun.pendientesDeEnviar, { n: pendientes })
+        : "";
+  let base;
+  if (demo) {
+    base =
+      guardados === 1
+        ? textos.cuaderno.guardadoAquiUno
+        : guardados > 1
+          ? textoRelleno(textos.cuaderno.guardadoAqui, { n: guardados })
+          : textos.cuaderno.sinApuntesAqui;
+  } else {
+    base = textos.cuaderno.guardadoEnElCuaderno;
+  }
+  return cola ? `${base} ${cola}` : base;
+}
 
 /**
  * **El texto de la franja de cobertura, según dónde esté la pantalla.** (13/11/2026)

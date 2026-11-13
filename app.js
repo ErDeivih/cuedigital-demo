@@ -58,6 +58,7 @@ import {
   datosDelPanel,
   cuentaDeUnaSeccion,
   decidirEstado,
+  destinoActivo,
   destinoDeLaSeccion,
   dosisMaximaEnTexto,
   elAperoSeGuardaEnLabores,
@@ -66,6 +67,7 @@ import {
   empezarPorLoQueBloquea,
   primerBloqueoDeLoQueFalta,
   actualizadasDeLosContornos,
+  apuntesGuardadosAqui,
   avisoEnviado,
   avisoSinCobertura,
   etiquetaDeProvinciaCache,
@@ -129,6 +131,7 @@ import {
   sinCodigosDeLosContornos,
   sinMapa,
   sumaDeHectareas,
+  textoDeLoGuardado,
   textos,
   textoDeTotales,
   textoRelleno,
@@ -579,6 +582,20 @@ function EstadoNoDisponible({ alReintentar }) {
 
 // ---------------------------------------------------------------- armazón
 
+/**
+ * **La confirmación de lo guardado, persistente** (revisión externa, 13/11/2026): dice cuántos
+ * apuntes hay guardados y cuántos esperan para enviarse. No es un aviso que se va: es el estado.
+ */
+function EstadoDeLoGuardado({ guardados = 0, pendientes = 0, demo = false }) {
+  return html`<p
+    className="cuaderno__guardado"
+    role="status"
+    data-cuaderno-guardado
+    data-cuaderno-guardados=${guardados}
+    data-cuaderno-pendientes=${pendientes}
+  >${textoDeLoGuardado({ guardados, pendientes, demo })}</p>`;
+}
+
 function BarraDeConexion({ sinCobertura, pendientes, alEnviar, enviando, mensaje, demo = false }) {
   // **El estado de la cobertura y la cola, en un solo sitio y siempre a la vista** (13/11/2026).
   // Sin cobertura en el campo no es un error: es lo normal. Se dice qué pasa y qué puede hacer,
@@ -710,30 +727,29 @@ function claseDestino(activa, base) {
 }
 
 function BarraInferior({ vista, ir }) {
-  const esTierras = vista === "tierras" || vista === "alta" || vista === "tierra";
-  const claseHoy = claseDestino(vista === "hoy", "barra-inferior__destino");
-  const claseTierras = claseDestino(esTierras, "barra-inferior__destino");
-  const claseCalendario = claseDestino(vista === "calendario", "barra-inferior__destino");
-  const claseMas = claseDestino(vista === "mas" || vista === "trabajos" || vista === "facturas", "barra-inferior__destino");
+  // **Dónde estás, marcado** (revisión externa, 13/11/2026): la barra marca el destino activo
+  // también en Cuaderno y en Productos, que antes no marcaban nada.
+  const activo = destinoActivo(vista);
+  const clase = (clave) => claseDestino(activo === clave, "barra-inferior__destino");
 
   return html`<nav className="barra-inferior" data-nav-inferior aria-label="Los cinco destinos">
-    <button type="button" className=${claseHoy} data-destino="hoy" onClick=${() => ir("hoy")} aria-current=${vista === "hoy" ? "page" : undefined}>
+    <button type="button" className=${clase("hoy")} data-destino="hoy" onClick=${() => ir("hoy")} aria-current=${activo === "hoy" ? "page" : undefined}>
       <${Icono} nombre="hoy" />
       ${textos.nav.hoy}
     </button>
-    <button type="button" className=${claseTierras} data-destino="tierras" onClick=${() => ir("tierras")} aria-current=${esTierras ? "page" : undefined}>
+    <button type="button" className=${clase("tierras")} data-destino="tierras" onClick=${() => ir("tierras")} aria-current=${activo === "tierras" ? "page" : undefined}>
       <${Icono} nombre="tierras" />
       ${textos.nav.tierras}
     </button>
-    <button type="button" className="barra-inferior__apuntar" data-destino="apuntar" aria-label=${textos.nav.apuntar} onClick=${() => ir("apuntar")} aria-current=${vista === "apuntar" ? "page" : undefined}>
+    <button type="button" className="barra-inferior__apuntar" data-destino="apuntar" aria-label=${textos.nav.apuntar} onClick=${() => ir("apuntar")} aria-current=${activo === "apuntar" ? "page" : undefined}>
       <${Icono} nombre="apuntar" tamano=${20} />
       ${textos.nav.apuntar}
     </button>
-    <button type="button" className=${claseCalendario} data-destino="calendario" onClick=${() => ir("calendario")} aria-current=${vista === "calendario" ? "page" : undefined}>
+    <button type="button" className=${clase("calendario")} data-destino="calendario" onClick=${() => ir("calendario")} aria-current=${activo === "calendario" ? "page" : undefined}>
       <${Icono} nombre="campana" />
       ${textos.nav.calendario}
     </button>
-    <button type="button" className=${claseMas} data-destino="mas" onClick=${() => ir("mas")} aria-current=${claseMas.includes("--activo") ? "page" : undefined}>
+    <button type="button" className=${clase("mas")} data-destino="mas" onClick=${() => ir("mas")} aria-current=${activo === "mas" ? "page" : undefined}>
       <${Icono} nombre="puntos" />
       ${textos.nav.mas}
     </button>
@@ -2230,6 +2246,8 @@ function Fragmento({ children }) {
  * calcular con la fecha.
  */
 function ApunteRapido({ tierras, campana, productos, alGuardado }) {
+  // En la demo los apuntes se guardan en el navegador: la confirmación lo dice, no lo inventa.
+  const esDemo = typeof window !== "undefined" && window.CUEDIGITAL_DEMO === true;
   const [paso, setPaso] = useState(1);
   const [tierraId, setTierraId] = useState(() => (tierras[0] ? tierras[0].id : null));
   const [productoId, setProductoId] = useState(null);
@@ -2387,8 +2405,14 @@ function ApunteRapido({ tierras, campana, productos, alGuardado }) {
     </div>
     <p className="tarjeta__texto">${textos.enCuatroPasos.explica}</p>
 
-    ${resultado === "guardado"
-      ? html`<p className="panel__aviso panel__aviso--bien" data-apunte-rapido-guardado>${textos.enCuatroPasos.guardado}</p>`
+    ${resultado
+      ? html`<p className="panel__aviso panel__aviso--bien" data-apunte-rapido-guardado>
+          ${textoDeLoGuardado({
+            guardados: apuntesGuardadosAqui(almacenDelNavegador()),
+            pendientes,
+            demo: esDemo,
+          })}
+        </p>`
       : null}
     ${resultado === "pendiente"
       ? html`<p className="panel__aviso" data-apunte-rapido-pendiente>${textos.enCuatroPasos.pendiente}</p>`
@@ -3257,8 +3281,11 @@ function DescargarElCuaderno() {
   </section>`;
 }
 
-function VistaCuaderno({ alEstado, alIr }) {
+function VistaCuaderno({ alEstado, alIr, campana = null, pendientes = 0, demo = false }) {
   const pantalla = usarPantalla(RUTA_QUE_FALTA, true);
+  // **Las últimas labores, para poder comprobar que el trabajo quedó registrado** (revisión
+  // externa, 13/11/2026). La pantalla decía «completo» y no enseñaba ni una labor.
+  const pantallaTrabajos = usarPantalla(queryDeTrabajos(), true);
   // Este hook va antes de cualquier return: si vive detrás de los estados de carga, React ve
   // más hooks que en el render anterior y revienta (error #310).
   const [soloRellenables, setSoloRellenables] = useState(true);
@@ -3275,6 +3302,51 @@ function VistaCuaderno({ alEstado, alIr }) {
     : (secciones.find((seccion) => destinoDeLaSeccion(seccion.donde)) || null)
       ? destinoDeLaSeccion((secciones.find((seccion) => destinoDeLaSeccion(seccion.donde)) || {}).donde)
       : null;
+
+  const labores = normalizaTrabajos(
+    pantallaTrabajos.estado === "listo" ? pantallaTrabajos.datos : null,
+    [],
+  ).trabajos;
+  const guardadosAqui = demo ? labores.length : 0;
+  const estadoDeLoGuardado = html`<${EstadoDeLoGuardado} guardados=${guardadosAqui} pendientes=${pendientes} demo=${demo} />`;
+  const campanaEnTexto = campana && campana.anio
+    ? textoRelleno(textos.cuaderno.campana, { campana: campana.anio })
+    : textos.cuaderno.campanaSinAnio;
+
+  const ultimas = html`<section className="tarjeta" data-cuaderno-ultimos aria-labelledby="cuaderno-ultimos-titulo">
+    <h2 className="tarjeta__titulo" id="cuaderno-ultimos-titulo">${textos.cuaderno.ultimasLabores}</h2>
+    ${pantallaTrabajos.estado === "cargando"
+      ? html`<p className="estado__texto">${textos.trabajos.cargando}</p>`
+      : labores.length
+        ? html`<ul className="cuaderno__labores">
+            ${labores.slice(0, 5).map((trabajo, indice) => html`<li
+              className="cuaderno__labor"
+              key=${`cuaderno-labor-${indice}`}
+              data-cuaderno-labor
+              data-cuaderno-labor-fecha=${trabajo.fecha || ""}
+            >
+              <span className="cuaderno__labor-fecha">${fechaDe(trabajo.fecha)}</span>
+              <span className="cuaderno__labor-que">${trabajo.etiqueta}</span>
+              <span className="cuaderno__labor-tierra">${trabajo.tierra || textos.tierras.panel.noConsta}</span>
+            </li>`)}
+          </ul>`
+        : html`<p className="estado__texto">${textos.cuaderno.sinLabores}</p>`}
+    <div className="estado__acciones">
+      ${labores.length
+        ? html`<button type="button" className="boton boton--principal boton--grande" data-cuaderno-ver-todos onClick=${() => alIr("trabajos")}>${textos.cuaderno.verTodosLosApuntes}</button>`
+        : html`<button type="button" className="boton boton--principal boton--grande" data-cuaderno-apuntar onClick=${() => alIr("apuntar")}>${textos.cuaderno.apuntarUnTrabajo}</button>`}
+    </div>
+  </section>`;
+
+  const resumenCompleto = html`<section className="tarjeta cuaderno__resumen" data-cuaderno-resumen-completo aria-labelledby="cuaderno-completo-titulo">
+    <h2 className="tarjeta__titulo" id="cuaderno-completo-titulo">${textos.cuaderno.titulo}</h2>
+    <p className="cuaderno__resumen-texto">${textos.cuaderno.completo}</p>
+    <p className="pagina__dato" data-cuaderno-campana>${campanaEnTexto}</p>
+    <p className="cuaderno__resumen-bloqueo">
+      <span className="chip" data-cuaderno-pendientes-cuenta=${cuantas}>${textos.cuaderno.pendientesCero}</span>
+    </p>
+    <p className="pagina__dato">${textos.cuaderno.alDia}</p>
+  </section>`;
 
   useEffect(() => {
     if (!alEstado) return;
@@ -3313,9 +3385,11 @@ function VistaCuaderno({ alEstado, alIr }) {
   if (!items.length) {
     return html`<div>
       ${cabecera}
-      <p className="estado__texto">${textos.cuaderno.completo}</p>
+      ${estadoDeLoGuardado}
+      ${resumenCompleto}
+      ${ultimas}
       <${DescargarElCuaderno} />
-      <a className="boton" href="/">${textos.cuaderno.abrirJv}</a>
+      <p><a className="boton" href="/">${textos.cuaderno.abrirJv}</a></p>
     </div>`;
   }
 
@@ -3405,9 +3479,11 @@ function VistaCuaderno({ alEstado, alIr }) {
 
   return html`<div className="pantalla-cuaderno">
     ${cabecera}
+    ${estadoDeLoGuardado}
     ${avisoDeLoQueBloquea}
     ${resumenDelCuaderno}
     ${bloques}
+    ${ultimas}
     <${DescargarElCuaderno} />
     <p><a className="boton" href="/">${textos.cuaderno.abrirJv}</a></p>
   </div>`;
@@ -5160,7 +5236,7 @@ function App() {
       }}
     />`;
   } else if (vista === "cuaderno") {
-    pantalla = html`<${VistaCuaderno} alEstado=${setEstadoSecundario} alIr=${ir} />`;
+    pantalla = html`<${VistaCuaderno} alEstado=${setEstadoSecundario} alIr=${ir} campana=${datosDeLaFinca && datosDeLaFinca.campana} pendientes=${pendientes} demo=${enDemo} />`;
   } else if (vista === "productos") {
     pantalla = html`<${VistaProductos}
       tierras=${tierras}
