@@ -423,7 +423,7 @@
     aviso.id = "demo-aviso";
     aviso.setAttribute("role", "status");
     aviso.innerHTML =
-      "<span><b>DEMO</b> · Datos ficticios de ejemplo (cinco parcelas inventadas). " +
+      "<span><b>DEMO</b> · Datos ficticios de ejemplo (parcelas inventadas). " +
       "Lo que apuntes se queda en este navegador, no en un servidor.</span>";
     document.body.insertBefore(aviso, document.body.firstChild);
   }

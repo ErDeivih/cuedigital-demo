@@ -66,6 +66,8 @@ import {
   empezarPorLoQueBloquea,
   primerBloqueoDeLoQueFalta,
   actualizadasDeLosContornos,
+  avisoEnviado,
+  avisoSinCobertura,
   etiquetaDeProvinciaCache,
   etiquetaDelRecintoEnElMapa,
   etiquetaDeTrabajo,
@@ -577,7 +579,7 @@ function EstadoNoDisponible({ alReintentar }) {
 
 // ---------------------------------------------------------------- armazón
 
-function BarraDeConexion({ sinCobertura, pendientes, alEnviar, enviando, mensaje }) {
+function BarraDeConexion({ sinCobertura, pendientes, alEnviar, enviando, mensaje, demo = false }) {
   // **El estado de la cobertura y la cola, en un solo sitio y siempre a la vista** (13/11/2026).
   // Sin cobertura en el campo no es un error: es lo normal. Se dice qué pasa y qué puede hacer,
   // sin alarma y sin ofrecer un botón que no va a poder funcionar.
@@ -592,7 +594,7 @@ function BarraDeConexion({ sinCobertura, pendientes, alEnviar, enviando, mensaje
     data-aviso-conexion=${sinCobertura ? "sin-cobertura" : "pendiente"}
   >
     ${sinCobertura
-      ? html`<p className="aviso-conexion-global__texto">${textos.comun.avisoSinCobertura}</p>`
+      ? html`<p className="aviso-conexion-global__texto">${avisoSinCobertura(demo)}</p>`
       : null}
     ${mensaje
       ? html`<p className="aviso-conexion-global__mensaje" data-aviso-envio>${mensaje}</p>`
@@ -822,16 +824,22 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta, alApunt
   // pantalla, y el agricultor sin saber a cuál creer. Manda la lista, que es la que dice qué
   // falta y dónde se arregla; la tarjeta repite esa misma cuenta y no enseña la nota del resumen
   // cuando la lista dice que no falta nada (`faltasDelCuaderno`).
-  const cuantasFaltan = faltasDelCuaderno(
+  const cuentaDelCuaderno = faltasDelCuaderno(
     queFalta.estado === "listo" ? queFalta.datos : null,
     resumen.estado === "listo" ? resumen.datos : null,
-  ).faltan;
-  const textoDelCuaderno = cuantasFaltan === 0
-    ? textos.cuaderno.completo
-    : cuantasFaltan === 1
-      ? textos.cuaderno.faltaUna
-      : textoRelleno(textos.cuaderno.faltan, { n: cuantasFaltan });
-  const mostrarQueFalta = queFalta.estado !== "listo" || cuantasFaltan > 0;
+  );
+  // `faltan === null` quiere decir «no lo sé»: ni cero ni «completo». Se dice y el bloque de «qué
+  // falta» ofrece reintentar. Un cero inventado sobre una obligación legal no es un dato.
+  const seSabe = cuentaDelCuaderno.faltan !== null;
+  const cuantasFaltan = seSabe ? cuentaDelCuaderno.faltan : 0;
+  const textoDelCuaderno = !seSabe
+    ? textos.comun.noSeSabeQueFalta
+    : cuantasFaltan === 0
+      ? textos.cuaderno.completo
+      : cuantasFaltan === 1
+        ? textos.cuaderno.faltaUna
+        : textoRelleno(textos.cuaderno.faltan, { n: cuantasFaltan });
+  const mostrarQueFalta = queFalta.estado !== "listo" || cuantasFaltan > 0 || !seSabe;
 
   return html`<div className="pantalla-hoy">
     <header className="pagina__cabecera" data-titulo=${textos.hoy.titulo}>
@@ -858,7 +866,7 @@ function VistaHoy({ estadoVista, datos, alReintentar, resumen, queFalta, alApunt
       <article className="tarjeta-dato" data-resumen-cuaderno=${textoDelCuaderno}>
         <h2 className="tarjeta-dato__titulo">${textos.hoy.cuaderno}</h2>
         <p className="tarjeta-dato__cifra">${textoDelCuaderno}</p>
-        ${cuantasFaltan > 0
+        ${seSabe && cuantasFaltan > 0
           ? html`<p className="tarjeta-dato__nota">${contable.cuaderno.nota || textos.hoy.cuadernoNota}</p>`
           : null}
       </article>
@@ -4939,6 +4947,9 @@ function App() {
   const [arrancada, setArrancada] = useState(false);
   const [estadoSecundario, setEstadoSecundario] = useState("cargando");
   const [sinCobertura, setSinCobertura] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  // La demo se anuncia con `window.CUEDIGITAL_DEMO` (lo pone `demo.js`): con eso se eligen los
+  // textos que no prometen un servidor que no existe.
+  const enDemo = typeof window !== "undefined" && window.CUEDIGITAL_DEMO === true;
   // **La cola del móvil, en el armazón** (13/11/2026): si un apunte no se pudo mandar, se dice
   // arriba aunque el agricultor esté en otra pantalla. El estado vive aquí y la tarjeta del
   // apunte avisa con un evento cuando cambia, para que las dos cuenten lo mismo.
@@ -5048,7 +5059,7 @@ function App() {
     );
     setPendientes(restantes);
     setEnviandoLaCola(false);
-    setAvisoDeLaCola(enviados ? textos.comun.enviado : textos.comun.noSePudoEnviar);
+    setAvisoDeLaCola(enviados ? avisoEnviado(enDemo) : textos.comun.noSePudoEnviar);
     if (enviados) {
       if (pantallaHoy.reintentar) pantallaHoy.reintentar();
       if (pantallaTierras.reintentar) pantallaTierras.reintentar();
@@ -5190,6 +5201,7 @@ function App() {
       alEnviar=${enviarLaCola}
       enviando=${enviandoLaCola}
       mensaje=${avisoDeLaCola}
+      demo=${enDemo}
     />
     <div className="cuerpo">
       <${BarraLateral} vista=${vista} ir=${ir} />

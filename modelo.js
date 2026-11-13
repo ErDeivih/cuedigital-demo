@@ -83,6 +83,13 @@ export const textos = {
     enviado: "Ya está enviado.",
     noSePudoEnviar:
       "No se ha podido enviar. Se queda guardado en el móvil y se manda cuando vuelva la cobertura.",
+    // **En la demo no hay servidor**: prometer un envío por la red sería mentir en la misma
+    // pantalla en la que el cartel dice que lo apuntado se queda en el navegador.
+    avisoSinCoberturaDemo:
+      "Sin cobertura. Puedes seguir apuntando: lo que guardes se queda en este navegador, porque esto es una demo.",
+    enviadoDemo:
+      "Apuntado. Se queda en este navegador (demo); en la app de verdad se manda solo al volver la cobertura.",
+    noSeSabeQueFalta: "No se ha podido mirar lo que falta.",
   },
   hoy: {
     titulo: "Hoy",
@@ -99,7 +106,7 @@ export const textos = {
     queFalta: "Qué falta",
     queFaltaVacio: "No falta nada para el cuaderno.",
     verQueFalta: "Ver qué falta",
-    abrirAppVieja: "Abrir la app de siempre",
+    abrirAppVieja: "Abrir el programa de siempre",
     apunte: "apunte",
     apuntes: "apuntes",
     factura: "factura",
@@ -278,7 +285,7 @@ export const textos = {
     descargarPdf: "Descargar el cuaderno (PDF)",
     bajando: "Preparando el PDF…",
     noSePudoBajar: "No se ha podido bajar el cuaderno. Inténtalo otra vez.",
-    intro: "Lo que falta para que el registro esté completo, y dónde se arregla cada cosa.",
+    intro: "Lo que falta para que el cuaderno esté completo, y dónde se arregla cada cosa.",
     faltan: "Faltan {n} cosas",
     faltaUna: "Falta 1 cosa",
     completo: "El cuaderno está completo.",
@@ -555,7 +562,7 @@ export const textos = {
     noDisponible: "El historial de la tierra todavía no está en la pantalla nueva.",
     anio: "Año",
     sinMapa: "Esta tierra no tiene forma en el SIGPAC: se enseñan sus datos, pero no se dibuja.",
-    abrirAppVieja: "Abrir la app de siempre",
+    abrirAppVieja: "Abrir el programa de siempre",
   },
   calendario: {
     titulo: "Calendario",
@@ -590,7 +597,7 @@ export const textos = {
     sinSuperficie: "sin superficie",
     totalesUno: "1 trabajo",
     totales: "{n} trabajos",
-    hectareasTotales: "{ha} ha",
+    hectareasTotales: "{ha} ha trabajadas",
     filtroTierra: "Tierra",
     todas: "Todas",
     desde: "Desde",
@@ -650,6 +657,22 @@ export const textos = {
     yaEstaba: "Esa factura ya estaba guardada.",
   },
 };
+
+/**
+ * **El texto de la franja de cobertura, según dónde esté la pantalla.** (13/11/2026)
+ *
+ * La demo avisa arriba de que lo apuntado se queda en el navegador y no va a un servidor; la
+ * franja no puede prometer lo contrario en la misma pantalla. En la app de verdad, sin
+ * cobertura, la promesa es la buena: se manda solo cuando vuelva.
+ */
+export function avisoSinCobertura(esDemo) {
+  return esDemo ? textos.comun.avisoSinCoberturaDemo : textos.comun.avisoSinCobertura;
+}
+
+/** Lo que se dice cuando el apunte se ha mandado: en la demo, que se ha guardado aquí. */
+export function avisoEnviado(esDemo) {
+  return esDemo ? textos.comun.enviadoDemo : textos.comun.enviado;
+}
 
 function redondea(valor, decimales = 2) {
   const factor = 10 ** decimales;
@@ -1111,7 +1134,7 @@ export function normalizaQueFalta(datos) {
  * tarjeta decía «El cuaderno está completo» y «faltan 3 cosas» a la vez: lo destapó la medición
  * mirando la pantalla, no el código. Manda la lista —que es la que puede decir dónde se
  * arregla—; el resumen solo rellena el hueco cuando la lista no ha llegado. Sin ninguno de los
- * dos no se inventa nada: cero.
+ * dos no se inventa nada: «no lo sé» (`null`), que en pantalla se dice y ofrece reintentar.
  */
 export function faltasDelCuaderno(queFalta, resumen) {
   const lista = queFalta && typeof queFalta === "object" ? queFalta : null;
@@ -1122,8 +1145,11 @@ export function faltasDelCuaderno(queFalta, resumen) {
       ? resumen.cuaderno.faltan
       : null;
   const faltan =
-    deLaLista !== null ? deLaLista : enLaLista !== null ? enLaLista : delResumen !== null ? delResumen : 0;
-  return { faltan, completa: faltan === 0 };
+    deLaLista !== null ? deLaLista : enLaLista !== null ? enLaLista : delResumen !== null ? delResumen : null;
+  // `null` es «no lo sé», y no es lo mismo que cero: decir «el cuaderno está completo» sin
+  // haberlo podido mirar es un cero inventado sobre una obligación legal (lo avisó la revisión
+  // de ojos frescos del 13/11/2026).
+  return { faltan, completa: faltan === null ? null : faltan === 0 };
 }
 
 /**
@@ -2334,6 +2360,18 @@ export function totalesDeTrabajos(trabajos) {
     const cantidad = trabajo.cantidad;
     const unidad = String(trabajo.unidad ?? "").trim();
     if (cantidad === null || cantidad === undefined || !unidad) continue;
+    // **Una dosis por hectárea no es un total** (13/11/2026): sumar 200 kg/ha y 20 kg/ha no da
+    // «220 kg/ha», que es lo que la cabecera decía. Se convierte por la superficie de cada
+    // apunte y el total sale en la unidad del producto (kg, L). Si no se sabe la superficie, ese
+    // apunte no entra en el total: no se inventa.
+    const porHectarea = Boolean(trabajo.porHectarea) || /\/\s*ha\b/i.test(unidad);
+    if (porHectarea) {
+      const hectareasDelApunte = Number(trabajo.hectareas);
+      if (!Number.isFinite(hectareasDelApunte) || hectareasDelApunte <= 0) continue;
+      const base = unidad.replace(/\/\s*ha\b/i, "").trim();
+      porUnidad.set(base, (porUnidad.get(base) || 0) + Number(cantidad) * hectareasDelApunte);
+      continue;
+    }
     porUnidad.set(unidad, (porUnidad.get(unidad) || 0) + Number(cantidad));
   }
   return {
