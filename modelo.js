@@ -90,6 +90,10 @@ export const textos = {
     enviadoDemo:
       "Apuntado. Se queda en este navegador (demo); en la app de verdad se manda solo al volver la cobertura.",
     noSeSabeQueFalta: "No se ha podido mirar lo que falta.",
+    // **«Sin conexión» es un motivo, no un fallo genérico** (segunda tanda): cuando lo que falta es
+    // cobertura se dice, y se recuerda que lo apuntado sigue guardado.
+    falloSinCobertura:
+      "Sin conexión. Revisa la cobertura y vuelve a intentarlo; lo que ya has apuntado sigue guardado.",
   },
   hoy: {
     titulo: "Hoy",
@@ -746,6 +750,15 @@ export function avisoSinCobertura(esDemo) {
 /** Lo que se dice cuando el apunte se ha mandado: en la demo, que se ha guardado aquí. */
 export function avisoEnviado(esDemo) {
   return esDemo ? textos.comun.enviadoDemo : textos.comun.enviado;
+}
+
+/**
+ * **El mensaje del error, con su motivo** (segunda tanda). Si no hay cobertura se dice eso y se
+ * recuerda que lo apuntado sigue guardado; si el servidor es el que no contesta, se dice lo que
+ * venga del sitio que falló. Un «algo salió mal» sin motivo no es un aviso.
+ */
+export function mensajeDeFallo(mensaje, sinCobertura) {
+  return sinCobertura ? textos.comun.falloSinCobertura : mensaje;
 }
 
 function redondea(valor, decimales = 2) {

@@ -90,6 +90,7 @@ import {
   leyendaDe,
   lineasDeLosContornos,
   mandarLosApuntesPendientes,
+  mensajeDeFallo,
   mensajesDeLaRespuesta,
   mesEnPalabras,
   municipioDeTierra,
@@ -550,9 +551,15 @@ function EstadoCargando({ mensaje }) {
 }
 
 function EstadoFallo({ mensaje, alReintentar }) {
+  // Un fallo de red no puede dejar al agricultor sin salida: además de reintentar, la aplicación
+  // de siempre. Y si lo que falta es cobertura, se dice («sin conexión»), no «algo falló».
+  const sinCobertura = typeof navigator !== "undefined" && navigator.onLine === false;
   return html`<div className="estado estado--fallo" role="alert">
-    <p className="estado__texto">${mensaje}</p>
-    <button type="button" className="boton" data-reintentar onClick=${alReintentar}>${textos.comun.reintentar}</button>
+    <p className="estado__texto">${mensajeDeFallo(mensaje, sinCobertura)}</p>
+    <div className="estado__acciones">
+      <button type="button" className="boton" data-reintentar onClick=${alReintentar}>${textos.comun.reintentar}</button>
+      <a className="boton" data-salir href="/">${textos.hoy.abrirAppVieja}</a>
+    </div>
   </div>`;
 }
 
